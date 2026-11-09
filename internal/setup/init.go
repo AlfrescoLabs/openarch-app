@@ -22,13 +22,30 @@ type Runner func(ctx context.Context, dir string, stdin io.Reader, name string, 
 
 // Env is the access to the system used by Init. Tests replace it with fakes.
 type Env struct {
-	Run      Runner
+	Run Runner
+	// Stream runs a command in dir with extra environment variables and
+	// copies its output to stdout and stderr while it runs.
+	Stream   func(ctx context.Context, dir string, extraEnv []string, stdout, stderr io.Writer, name string, args ...string) error
 	LookPath func(file string) (string, error)
 }
 
 // SystemEnv returns an Env backed by the real system.
 func SystemEnv() Env {
-	return Env{Run: runCommand, LookPath: exec.LookPath}
+	return Env{Run: runCommand, Stream: streamCommand, LookPath: exec.LookPath}
+}
+
+func streamCommand(ctx context.Context, dir string, extraEnv []string, stdout, stderr io.Writer, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s %s: %w", name, args[0], err)
+	}
+	return nil
 }
 
 func runCommand(ctx context.Context, dir string, stdin io.Reader, name string, args ...string) ([]byte, error) {

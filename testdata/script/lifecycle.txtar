@@ -1,0 +1,40 @@
+# Every lifecycle command needs a setup folder.
+! exec openarch-app up
+stderr 'openarch-app has no openarch-app.yaml'
+stderr 'Run .openarch app init. first, or use --dir.'
+! exec openarch-app status --dir nowhere -o json
+stdout '"code": "usage"'
+
+# A setup with an unknown schema version is refused.
+! exec openarch-app down --dir future
+stderr 'schemaVersion 9, this build reads 1'
+
+# logs cannot follow in JSON mode; the check runs before docker.
+cd setup
+! exec openarch-app logs --follow -o json
+stdout '--follow does not work with --output json'
+
+# The profiles with Nuxeo need nuxeo-deployment before compose runs.
+cd ../nuxeo
+! exec openarch-app up
+stderr 'profile full needs nuxeo-deployment'
+stderr 'openarch app doctor --profile full'
+
+-- future/openarch-app.yaml --
+schemaVersion: 9
+-- setup/openarch-app.yaml --
+schemaVersion: 1
+upstream: 160f618096c326445cbe4f9c65858f65852dad74
+profile: alfresco
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+-- nuxeo/openarch-app.yaml --
+schemaVersion: 1
+upstream: 160f618096c326445cbe4f9c65858f65852dad74
+profile: full
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app

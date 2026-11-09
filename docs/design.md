@@ -6,7 +6,7 @@ It is one Go binary. `openarch app ...` runs the `openarch-app` binary from `PAT
 
 Upstream is [AlfrescoLabs/content-lake-app-deployment](https://github.com/AlfrescoLabs/content-lake-app-deployment). Its repositories and variables use the name `content-lake`, and it names the Hyland OpenArch service `hxpr-app` (its clients use `HXPR_*` variables).
 
-Only `doctor`, `init` and `version` are built. The rest of this document is the design for the commands that come next. Flags of the built commands are in `openarch app <command> --help`.
+Every command of the first version is built. The rest of this document is the design for the commands that come next. Flags of the built commands are in `openarch app <command> --help`.
 
 ## Goals and non-goals
 
@@ -32,7 +32,7 @@ Not in the first version:
 3. **Secure by default, every security feature optional.** Ports bind to `127.0.0.1`, the secrets that the stack sets itself are random, and OpenArch has one admin user with a random password and no default users. A flag turns each of these off.
 4. **Local models only.** Embeddings and chat run on Docker Model Runner.
 5. **Same output contract as openarch.** Every command supports `--output json`. Results go to stdout, logs go to stderr. In JSON mode errors also go to stdout. The exit codes and the JSON error shape match openarch. Every prompt has a flag.
-6. **No passwords for host processes.** The plugin passes the OpenArch password to `openarch` on stdin, never as an argument or a variable. Containers get their secrets as environment variables, as upstream expects.
+6. **No OpenArch password in arguments or variables.** The plugin passes the OpenArch password to `openarch` on stdin, never as an argument or a variable. Containers get their secrets as environment variables, as upstream expects. The upstream test suites get the Alfresco and Nuxeo logins as environment variables, because they read them that way.
 
 ## Decisions
 
@@ -121,9 +121,9 @@ Upstream builds some images from remote Git contexts. `.env.local` sets each var
 | `version` | yes | Prints the version. |
 | `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the profile, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8082 and 8445 with `alfresco-2`), `nuxeo-deployment` for the Nuxeo profiles, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
 | `init [dir]` | yes | Creates the setup folder, fetches upstream, writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the `docker compose` command that starts the stack. |
-| `up`, `down`, `status`, `logs` | no | Run `docker compose up -d`, `down`, `ps` and `logs` with the profile and extras of `openarch-app.yaml`. `down` keeps the volumes. `up` prints the endpoints. |
-| `models pull` | no | Pulls the embedding model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. |
-| `smoke-test` | no | Runs the upstream `test/smoke-test.sh` against the running stack. |
+| `up`, `down`, `status`, `logs` | yes | Run `docker compose up -d --wait`, `down`, `ps` and `logs` with the profile and extras of `openarch-app.yaml`. `up` warns when a model is missing, fails early when nuxeo-deployment is missing, and prints the endpoints. `down` keeps the volumes. `status` exits with code 4 when a service is not healthy. In JSON mode `logs` returns the logs as one field and does not follow them. |
+| `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
+| `smoke-test` | yes | Runs the upstream suite of the profile against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/smoke-test.sh` for `full` (it covers both sources). It runs from the setup folder, never from `upstream/`. |
 
 Flags of `init`:
 
@@ -154,7 +154,7 @@ Flags of `init`:
 - nuxeo-deployment is outside Rules 2 and 3 in the first version: the plugin does not fetch it, and its port 8081 does not follow `BIND_IP`.
 - `ALFRESCO_ADMIN_PASSWORD`, `ALFRESCO_2_INTERNAL_PASSWORD` and `NUXEO_PASSWORD` keep their upstream values.
 - The secrets are tied to the volumes. Losing `.env.local` means losing access to the data.
-- Building the default chat model needs `bash`.
+- Building the default chat model and running the test suites need `bash`, `curl`, and `jq` or `python3`. On Windows that means Git Bash or WSL.
 - The plugin depends on the layout of upstream at the pinned commit. A new commit needs a test run before it becomes the default.
 - Setup needs the network: the Git fetch, the image pulls, the remote builds and the models.
 - The bundled OpenArch is separate from the one of a CLI workspace. Documents do not move between them.
