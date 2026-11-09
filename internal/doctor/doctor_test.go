@@ -18,6 +18,7 @@ type fake struct {
 	goos        string
 	noCLI       bool
 	noOpenArch  bool
+	noGit       bool
 	infoJSON    string
 	infoErr     string
 	composeOut  string
@@ -67,7 +68,7 @@ func (f *fake) env() Env {
 	return Env{
 		GOOS: f.goos,
 		LookPath: func(file string) (string, error) {
-			if (file == "docker" && f.noCLI) || (file == "openarch" && f.noOpenArch) {
+			if (file == "docker" && f.noCLI) || (file == "openarch" && f.noOpenArch) || (file == "git" && f.noGit) {
 				return "", errors.New("not found")
 			}
 			return "/usr/bin/" + file, nil
@@ -149,7 +150,7 @@ func TestHealthySystem(t *testing.T) {
 	if r.Failed() || r.Summary.Warn != 0 || r.Summary.Skip != 0 {
 		t.Fatalf("unexpected report: %+v", r)
 	}
-	want := []string{"docker.cli", "docker.daemon", "docker.compose", "docker.memory", "model.runner", "model.url", "model.embedding", "model.chat", "port.80", "port.8090", "openarch.cli"}
+	want := []string{"docker.cli", "docker.daemon", "docker.compose", "docker.memory", "git.cli", "model.runner", "model.url", "model.embedding", "model.chat", "port.80", "port.8090", "openarch.cli"}
 	if got := IDs(f.env(), opts()); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("IDs = %v, want %v", got, want)
 	}
@@ -217,21 +218,26 @@ func TestComposeVersion(t *testing.T) {
 func TestMemoryByProfile(t *testing.T) {
 	cases := []struct {
 		profile string
+		extras  []string
 		mem     int64
 		want    Status
 	}{
-		{"alfresco", 12 * gib, OK},
-		{"alfresco", 10 * gib, Warn},
-		{"alfresco", 6 * gib, Fail},
-		{"platform", 6 * gib, OK},
-		{"full", 12 * gib, Warn},
-		{"demo", 8 * gib, Fail},
+		{"alfresco", nil, 12 * gib, OK},
+		{"alfresco", nil, 10 * gib, Warn},
+		{"alfresco", nil, 6 * gib, Fail},
+		{"nuxeo", nil, 8 * gib, OK},
+		{"full", nil, 12 * gib, Warn},
+		{"full", nil, 8 * gib, Fail},
+		{"alfresco", []string{"alfresco-2"}, 16 * gib, Warn},
+		{"alfresco", []string{"alfresco-2"}, 10 * gib, Fail},
+		{"alfresco", []string{"alfresco-2"}, 18 * gib, OK},
 	}
 	for _, c := range cases {
 		f := newFake()
 		f.infoJSON = info(c.mem)
 		o := opts()
 		o.Profile = c.profile
+		o.Extras = c.extras
 		got := find(t, run(t, f, o), "docker.memory")
 		if got.Status != c.want {
 			t.Errorf("%s with %d GiB = %+v, want %s", c.profile, c.mem/gib, got, c.want)
@@ -239,6 +245,14 @@ func TestMemoryByProfile(t *testing.T) {
 		if c.want != OK && !strings.Contains(got.Fix, "Settings > Resources") {
 			t.Errorf("%s: fix = %q", c.profile, got.Fix)
 		}
+	}
+}
+
+func TestNoGit(t *testing.T) {
+	f := newFake()
+	f.noGit = true
+	if c := find(t, run(t, f, opts()), "git.cli"); c.Status != Fail || !strings.Contains(c.Fix, "git-scm.com") {
+		t.Errorf("git = %+v", c)
 	}
 }
 
@@ -306,7 +320,7 @@ func TestNuxeoDeployment(t *testing.T) {
 	o := opts()
 	o.Profile = "full"
 	c := find(t, run(t, f, o), "nuxeo.deployment")
-	if c.Status != Fail || !strings.Contains(c.Fix, "git clone https://github.com/aborroy/nuxeo-deployment.git") {
+	if c.Status != Fail || !strings.Contains(c.Fix, "git clone https://github.com/aborroy/nuxeo-deployment.git") || !strings.Contains(c.Fix, "checkout 0a5569054e6b") {
 		t.Errorf("missing: %+v", c)
 	}
 	f.dirs["setup/nuxeo-deployment"] = true
@@ -384,7 +398,7 @@ func TestWriteText(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := b.String()
-	for _, want := range []string{"[ok]   docker.cli", "[fail] port.80 ", "fix: Find the process", "10 ok, 0 warn, 1 fail, 0 skip"} {
+	for _, want := range []string{"[ok]   docker.cli", "[fail] port.80 ", "fix: Find the process", "11 ok, 0 warn, 1 fail, 0 skip"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}

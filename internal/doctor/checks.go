@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -27,12 +28,14 @@ const (
 type memory struct{ min, recommended int64 }
 
 var profileMemory = map[string]memory{
-	"platform": {4 * gib, 6 * gib},
 	"nuxeo":    {6 * gib, 8 * gib},
 	"alfresco": {8 * gib, 12 * gib},
 	"full":     {10 * gib, 16 * gib},
-	"demo":     {10 * gib, 16 * gib},
 }
+
+// alfresco2Memory is added for the alfresco-2 extra: a second Alfresco,
+// Postgres, ActiveMQ, indexer and ingesters.
+var alfresco2Memory = memory{4 * gib, 6 * gib}
 
 const installDockerFix = "Install Docker Desktop: https://docs.docker.com/get-started/get-docker/"
 
@@ -116,6 +119,7 @@ func checks(_ Env, opts Options) []check {
 		{"docker.daemon", "Docker daemon", checkDockerDaemon},
 		{"docker.compose", "Docker Compose v2 or later", checkCompose},
 		{"docker.memory", "Docker memory for the profile", checkMemory},
+		{"git.cli", "Git", checkGit},
 		{"model.runner", "Docker Model Runner", checkModelRunner},
 		{"model.url", "Docker Model Runner API", checkModelURL},
 		{"model.embedding", "Embedding model", modelCheck(func(o Options) string { return o.EmbeddingModel })},
@@ -179,6 +183,10 @@ func checkMemory(ctx context.Context, s *state) Result {
 		return skipped("Docker daemon is not reachable")
 	}
 	need := profileMemory[s.opts.Profile]
+	if slices.Contains(s.opts.Extras, "alfresco-2") {
+		need.min += alfresco2Memory.min
+		need.recommended += alfresco2Memory.recommended
+	}
 	mem := fmt.Sprintf("%.1f GiB available to Docker", float64(info.MemTotal)/gib)
 	fix := fmt.Sprintf("Give Docker at least %d GiB of memory (Docker Desktop: Settings > Resources), or use a smaller profile.", need.recommended/gib)
 	switch {
@@ -188,6 +196,15 @@ func checkMemory(ctx context.Context, s *state) Result {
 		return Result{Status: Warn, Message: mem + fmt.Sprintf(", %d GiB recommended for profile %s", need.recommended/gib, s.opts.Profile), Fix: fix}
 	}
 	return Result{Status: OK, Message: mem}
+}
+
+func checkGit(_ context.Context, s *state) Result {
+	path, err := s.env.LookPath("git")
+	if err != nil {
+		return Result{Status: Fail, Message: "git command not found in PATH; init fetches upstream with git",
+			Fix: "Install Git: https://git-scm.com/downloads"}
+	}
+	return Result{Status: OK, Message: "found " + path}
 }
 
 func checkModelRunner(ctx context.Context, s *state) Result {
@@ -253,7 +270,8 @@ func checkNuxeoDeployment(_ context.Context, s *state) Result {
 	dir := filepath.Join(s.opts.Dir, stack.NuxeoDeploymentDir)
 	if info, err := s.env.Stat(dir); err != nil || !info.IsDir() {
 		return Result{Status: Fail, Message: fmt.Sprintf("%s is missing; profile %s needs it", dir, s.opts.Profile),
-			Fix: fmt.Sprintf("git clone %s %s, then start it: docker compose --project-directory %s up -d", stack.NuxeoDeploymentURL, dir, dir)}
+			Fix: fmt.Sprintf("git clone %s %s && git -C %s checkout %s, then start it: docker compose --project-directory %s up -d",
+				stack.NuxeoDeploymentURL, dir, dir, stack.NuxeoDeploymentRef, dir)}
 	}
 	return Result{Status: OK, Message: "found " + dir}
 }

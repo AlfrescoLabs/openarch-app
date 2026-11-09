@@ -21,7 +21,7 @@ openarch app version
 openarch plugin list
 ```
 
-`doctor` checks Docker, Docker Compose, Docker memory for the profile, Docker Model Runner and its models, free ports, `nuxeo-deployment` for the profiles with Nuxeo, and the CLI for OpenArch 0.5.2 or later.
+`doctor` checks Docker, Docker Compose, Docker memory for the profile, Git, Docker Model Runner and its models, free ports, `nuxeo-deployment` for the profiles with Nuxeo, and the CLI for OpenArch 0.5.2 or later.
 
 It also runs on its own as `openarch-app`.
 

@@ -52,7 +52,9 @@ func (r Report) Failed() bool { return r.Summary.Fail > 0 }
 type Options struct {
 	// Profile is the upstream base profile. It sets the memory threshold and
 	// whether nuxeo-deployment is needed.
-	Profile        string
+	Profile string
+	// Extras are the opt-in additions, such as alfresco-2.
+	Extras         []string
 	LLMModel       string
 	EmbeddingModel string
 	// ModelURL is Docker Model Runner as seen from the host.
