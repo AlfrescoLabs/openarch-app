@@ -1,0 +1,11 @@
+/bin/
+/dist/
+*.test
+coverage.out
+/.claude/settings.local.json
+/CLAUDE.md
+
+# Local review reports and drafts
+*_report.md
+*_report_initial.md
+issues-draft.md

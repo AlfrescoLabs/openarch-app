@@ -1,0 +1,2 @@
+# Golden files and test scripts are compared byte by byte, so keep LF on every OS.
+* text=auto eol=lf
