@@ -4,7 +4,7 @@
 
 It is one Go binary. It runs as the `openarch app` plugin of the CLI for OpenArch (github.com/AlfrescoLabs/openarch-cli), or on its own. App for OpenArch is a proof of concept, and so is this plugin.
 
-Only `version` is built. The rest of this document is the design for the commands that come next. Flags are in `openarch app <command> --help`.
+Only `doctor` and `version` are built. The rest of this document is the design for the commands that come next. Flags are in `openarch app <command> --help`.
 
 ## Rules
 

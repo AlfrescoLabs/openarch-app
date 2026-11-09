@@ -9,16 +9,19 @@ The plugin wraps the upstream [content-lake-app-deployment](https://github.com/A
 
 ## Status
 
-In development. Only `version` works.
+In development. `doctor` and `version` work.
 
 ## Run it
 
 Put `openarch-app` on `PATH`. The CLI for OpenArch then runs it as a plugin:
 
 ```sh
+openarch app doctor
 openarch app version
 openarch plugin list
 ```
+
+`doctor` checks Docker, Docker Compose, Docker memory for the profile, Docker Model Runner and its models, free ports, `nuxeo-deployment` for the profiles with Nuxeo, and the CLI for OpenArch 0.5.2 or later.
 
 It also runs on its own as `openarch-app`.
 

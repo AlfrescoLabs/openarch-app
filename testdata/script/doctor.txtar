@@ -1,0 +1,34 @@
+# The CLI for OpenArch is found in PATH (a fake here)
+exec openarch-app doctor --check openarch.cli
+stdout '^\[ok\] +openarch.cli +openarch 0.5.2$'
+stdout '1 ok, 0 warn, 0 fail, 0 skip'
+
+# Too old: exit code 3, with a fix
+env FAKE_OPENARCH_VERSION=0.5.1
+! exec openarch-app doctor --check openarch.cli
+stdout '\[fail\] +openarch.cli +openarch 0.5.1 is too old'
+stdout 'fix: Install or update the CLI for OpenArch'
+env FAKE_OPENARCH_VERSION=
+
+# nuxeo.deployment runs only for the profiles with Nuxeo
+! exec openarch-app doctor --check nuxeo.deployment
+stderr 'unknown check "nuxeo.deployment"'
+stderr 'Valid checks: docker.cli, '
+! exec openarch-app doctor --profile full --dir setup --check nuxeo.deployment -o json
+stdout '"id": "nuxeo.deployment"'
+stdout '"status": "fail"'
+stdout '"fix": "git clone https://github.com/aborroy/nuxeo-deployment.git '
+stdout '"fail": 1'
+mkdir setup/nuxeo-deployment
+exec openarch-app doctor --profile nuxeo --dir setup --check nuxeo.deployment -o json
+stdout '"status": "ok"'
+
+# Usage errors
+! exec openarch-app doctor --profile nope
+stderr 'unknown profile "nope"'
+stderr 'Valid profiles: alfresco, nuxeo, full, demo, platform.'
+! exec openarch-app doctor --check nope -o json
+stdout '"code": "usage"'
+stdout 'unknown check'
+! exec openarch-app doctor extra
+stderr 'accepts no arguments'

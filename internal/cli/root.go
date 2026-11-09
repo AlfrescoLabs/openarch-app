@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/AlfrescoLabs/openarch-app/internal/doctor"
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
 	"github.com/AlfrescoLabs/openarch-app/internal/term"
 )
@@ -23,6 +24,9 @@ const (
 	envNonInteractive = "OPENARCH_NON_INTERACTIVE"
 	envVerbose        = "OPENARCH_VERBOSE"
 )
+
+// defaultSetupDir is the setup folder that 'init' creates when no folder is given.
+const defaultSetupDir = "openarch-app"
 
 // Streams holds the standard streams used by commands.
 type Streams struct {
@@ -45,10 +49,12 @@ type App struct {
 	Streams Streams
 	Printer *output.Printer
 	Log     *slog.Logger
+	// doctorEnv gives the system access of the doctor checks. Tests replace it.
+	doctorEnv func() doctor.Env
 }
 
 func newApp(s Streams) *App {
-	return &App{Streams: s}
+	return &App{Streams: s, doctorEnv: doctor.SystemEnv}
 }
 
 // Interactive reports whether commands may prompt the user.
@@ -108,7 +114,7 @@ It runs as the 'openarch app' plugin of the CLI for OpenArch, or on its own as
 Every command supports --output json. Results go to stdout and logs go to stderr.
 Exit codes: 0 ok, 1 error, 2 bad usage, 3 prerequisite missing,
 4 service not healthy, 5 remote API error, 6 authentication failed.`,
-		Example: `  openarch app version
+		Example: `  openarch app doctor
   openarch-app version --output json`,
 		Args:          noArgs,
 		SilenceErrors: true,
@@ -133,7 +139,7 @@ Exit codes: 0 ok, 1 error, 2 bad usage, 3 prerequisite missing,
 	pf.BoolVarP(&app.Opts.Verbose, "verbose", "v", envBool(envVerbose), "print debug logs to stderr (env "+envVerbose+")")
 	pf.BoolVar(&app.Opts.NoColor, "no-color", false, "disable colors (env NO_COLOR)")
 
-	root.AddCommand(newVersionCmd(app))
+	root.AddCommand(newDoctorCmd(app), newVersionCmd(app))
 	return root
 }
 
