@@ -13,14 +13,14 @@ In development. Every command of the first version works: `doctor`, `init`, `mod
 
 ## Install
 
-Download the archive for your system from the releases of this repository: Linux, macOS and Windows, on amd64 or arm64. Put `openarch-app` on your `PATH`, next to `openarch` (the CLI for OpenArch, 0.5.2 or later). The repository is private, so the download needs [GitHub CLI](https://cli.github.com/) with access to it:
+Download the archive for your system from the [releases page](https://github.com/AlfrescoLabs/openarch-app/releases): Linux, macOS and Windows, on amd64 or arm64. Put `openarch-app` on your `PATH`, next to `openarch` (the CLI for OpenArch, 0.5.2 or later).
 
 ```sh
-VERSION=0.1.0
+VERSION=0.1.1
 OS=linux        # or darwin, windows
 ARCH=amd64      # or arm64
-gh release download "v$VERSION" -R AlfrescoLabs/openarch-app \
-  -p "openarch-app_${VERSION}_${OS}_${ARCH}.tar.gz" -p checksums.txt -p checksums.txt.sigstore.json
+curl -LO "https://github.com/AlfrescoLabs/openarch-app/releases/download/v$VERSION/openarch-app_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -LO "https://github.com/AlfrescoLabs/openarch-app/releases/download/v$VERSION/checksums.txt"
 sha256sum --ignore-missing -c checksums.txt     # on macOS: shasum -a 256 --ignore-missing -c checksums.txt
 tar xzf "openarch-app_${VERSION}_${OS}_${ARCH}.tar.gz"
 sudo mv openarch-app /usr/local/bin/
@@ -32,6 +32,7 @@ On Windows, download the `.zip` archive and put `openarch-app.exe` in a folder o
 `checksums.txt` is signed with [cosign](https://docs.sigstore.dev/) by the release workflow (keyless, with the GitHub Actions identity), and each archive has an SBOM (`.sbom.json`, SPDX):
 
 ```sh
+curl -LO "https://github.com/AlfrescoLabs/openarch-app/releases/download/v$VERSION/checksums.txt.sigstore.json"
 cosign verify-blob checksums.txt \
   --bundle checksums.txt.sigstore.json \
   --certificate-identity "https://github.com/AlfrescoLabs/openarch-app/.github/workflows/release.yml@refs/tags/v$VERSION" \

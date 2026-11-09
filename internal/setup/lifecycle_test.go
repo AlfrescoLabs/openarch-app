@@ -100,6 +100,10 @@ func TestUpBuildsOnceAndRecords(t *testing.T) {
 	if !res.Built || !strings.HasSuffix(f.calls[0], "up -d --build --wait --wait-timeout 60") {
 		t.Errorf("first up: built=%v call=%q", res.Built, f.calls[0])
 	}
+	// up writes the override, so a setup from an older build gets the volume.
+	if b, err := os.ReadFile(filepath.Join(s.Dir, OverrideFile)); err != nil || !strings.Contains(string(b), "hxpr-data") {
+		t.Errorf("override not written: %v", err)
+	}
 	s, err = Open(s.Dir)
 	if err != nil {
 		t.Fatal(err)

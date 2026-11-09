@@ -170,7 +170,7 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 			return res, err
 		}
 	}
-	if err := writeFile(filepath.Join(dir, OverrideFile), renderOverride(c), 0o644); err != nil {
+	if err := WriteOverride(dir, c); err != nil {
 		return res, err
 	}
 

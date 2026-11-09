@@ -118,13 +118,25 @@ func TestRenderUsers(t *testing.T) {
 
 func TestRenderOverride(t *testing.T) {
 	got := string(renderOverride(Config{}))
-	for _, want := range []string{`"${BIND_IP:-127.0.0.1}:8090:8080"`, "OPENARCH_USERS_FILE: file:/etc/openarch/users.yml", "../openarch-users.yml:/etc/openarch/users.yml:ro"} {
+	volume := []string{"- hxpr-data:/deployments/nxserver/data", "hxpr-data-init:\n        condition: service_completed_successfully",
+		`command: ["chown", "33010:1000", "/data"]`, "network_mode: none", "volumes:\n  hxpr-data:\n"}
+	for _, want := range append([]string{`"${BIND_IP:-127.0.0.1}:8090:8080"`, "OPENARCH_USERS_FILE: file:/etc/openarch/users.yml", "../openarch-users.yml:/etc/openarch/users.yml:ro"}, volume...) {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
 	}
-	if got := string(renderOverride(Config{DefaultUsers: true})); strings.Contains(got, "users.yml") {
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(got), &parsed); err != nil {
+		t.Fatalf("not YAML: %v\n%s", err, got)
+	}
+	got = string(renderOverride(Config{DefaultUsers: true}))
+	if strings.Contains(got, "users.yml") {
 		t.Errorf("default users must not mount a users file:\n%s", got)
+	}
+	for _, want := range volume {
+		if !strings.Contains(got, want) {
+			t.Errorf("default users: missing %q in\n%s", want, got)
+		}
 	}
 }
 

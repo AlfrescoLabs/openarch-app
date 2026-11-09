@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -169,16 +170,42 @@ func renderUsers(password string) ([]byte, error) {
 
 // renderOverride writes compose.override.yaml. Compose resolves its relative
 // paths against the project directory, upstream/, so its neighbors are "../".
+//
+// Hyland OpenArch keeps its blobs, the embeddings included, in
+// /deployments/nxserver/data. Upstream gives that folder no volume, so a
+// recreated container loses them while MongoDB and OpenSearch keep the
+// metadata. The override adds the volume, and a one-shot service gives it to
+// the OpenArch user (uid 33010): OpenArch cannot write to a volume owned by root.
 func renderOverride(c Config) []byte {
 	var b strings.Builder
-	b.WriteString("# Written by 'openarch app init'. Relative paths start at upstream/, the Compose project directory.\n")
+	b.WriteString("# Written by 'openarch app init' and 'up'. Relative paths start at upstream/, the Compose project directory.\n")
 	b.WriteString("services:\n  hxpr-app:\n    ports:\n")
 	fmt.Fprintf(&b, "      - \"${BIND_IP:-127.0.0.1}:%d:8080\"\n", stack.OpenArchPort)
 	if !c.DefaultUsers {
 		b.WriteString("    environment:\n      OPENARCH_USERS_FILE: file:/etc/openarch/users.yml\n")
-		fmt.Fprintf(&b, "    volumes:\n      - ../%s:/etc/openarch/users.yml:ro\n", UsersFile)
 	}
+	b.WriteString("    volumes:\n      - " + openArchVolume + ":/deployments/nxserver/data\n")
+	if !c.DefaultUsers {
+		fmt.Fprintf(&b, "      - ../%s:/etc/openarch/users.yml:ro\n", UsersFile)
+	}
+	b.WriteString("    depends_on:\n      " + openArchVolumeInit + ":\n        condition: service_completed_successfully\n")
+	fmt.Fprintf(&b, "  %s:\n    image: %s\n    command: [\"chown\", \"33010:1000\", \"/data\"]\n", openArchVolumeInit, initImage)
+	b.WriteString("    network_mode: none\n    volumes:\n      - " + openArchVolume + ":/data\n")
+	b.WriteString("volumes:\n  " + openArchVolume + ":\n")
 	return []byte(b.String())
+}
+
+// The OpenArch data volume and the service that sets its owner.
+const (
+	openArchVolume     = "hxpr-data"
+	openArchVolumeInit = "hxpr-data-init"
+	initImage          = "alpine:3.24"
+)
+
+// WriteOverride writes compose.override.yaml for setup c into dir. 'up' calls
+// it too, so a setup made by an older build gets the current file.
+func WriteOverride(dir string, c Config) error {
+	return writeFile(filepath.Join(dir, OverrideFile), renderOverride(c), 0o644)
 }
 
 func newUUID() (string, error) {

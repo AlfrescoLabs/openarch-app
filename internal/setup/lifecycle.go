@@ -168,6 +168,9 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 	if err := s.CheckNuxeo(); err != nil {
 		return res, err
 	}
+	if err := WriteOverride(s.Dir, s.Config); err != nil {
+		return res, err
+	}
 	args := []string{"up", "-d"}
 	res.Built = s.NeedsBuild()
 	if res.Built {

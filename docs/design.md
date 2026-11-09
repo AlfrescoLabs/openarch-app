@@ -52,13 +52,14 @@ Not in the first version:
 openarch-app/
   openarch-app.yaml       # plugin settings
   .env.local              # generated settings and secrets, mode 0600
-  compose.override.yaml   # generated: OpenArch port and users file
+  compose.override.yaml   # generated: OpenArch port, users file and data volume
   openarch-users.yml      # generated OpenArch users (bcrypt hashes), mode 0644
   upstream/               # the upstream repository at the pinned commit, never edited
   nuxeo-deployment/       # the user adds it, only for the nuxeo and full profiles
 ```
 
 - `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 1`, the profile, the extras, the models, the bind IP, the name of the `openarch` context, and the build context SHAs of the last build. It holds no secrets.
+- `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
 - Upstream expects `nuxeo-deployment` next to its own repository (`../nuxeo-deployment`). The nuxeo-deployment project publishes Nuxeo on host port 8081. In the first version the user clones it at the commit that `doctor` prints, and starts it.
@@ -75,6 +76,7 @@ docker compose -p openarch-app --project-directory upstream \
 - `.env.local` comes after the upstream `.env`, so its values win.
 - The `alfresco-2` extra adds `-f upstream/compose.alfresco-2.yaml`.
 - Compose resolves relative paths in every file against the project directory, `upstream/`. So `compose.override.yaml` refers to its neighbors with `../` paths, for example `../openarch-users.yml`.
+- Hyland OpenArch keeps its blobs, the embeddings included, in `/deployments/nxserver/data`, and upstream gives that folder no volume. A recreated container would lose them while MongoDB and OpenSearch keep the metadata, and the next permission change would then delete the embeddings. So `compose.override.yaml` adds the volume `hxpr-data`, and a one-shot service `hxpr-data-init` gives it to the OpenArch user (uid 33010) before OpenArch starts: OpenArch cannot write to a volume owned by root.
 
 ## Credentials
 
