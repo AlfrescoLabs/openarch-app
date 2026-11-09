@@ -27,7 +27,7 @@ const (
 )
 
 // defaultSetupDir is the setup folder that 'init' creates when no folder is given.
-const defaultSetupDir = "openarch-app"
+const defaultSetupDir = setup.DefaultDir
 
 // Streams holds the standard streams used by commands.
 type Streams struct {

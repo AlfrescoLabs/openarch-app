@@ -82,7 +82,8 @@ type InitResult struct {
 	Config      Config   `json:"config"`
 	OpenArchURL string   `json:"openarchURL"`
 	Reused      []string `json:"reused,omitempty"`
-	Start       string   `json:"start"`
+	// Next are the commands to run next, in order.
+	Next []string `json:"next"`
 }
 
 // WriteText writes the human-readable form.
@@ -98,7 +99,10 @@ func (r InitResult) WriteText(w io.Writer) error {
 		fmt.Fprintf(&b, "Kept the existing %s.\n", f)
 	}
 	fmt.Fprintf(&b, "Added the openarch context %q for %s.\n", r.Config.Context, r.OpenArchURL)
-	fmt.Fprintf(&b, "\nStart the stack in %s with:\n  %s\n", r.Dir, r.Start)
+	b.WriteString("\nNext:\n")
+	for _, n := range r.Next {
+		fmt.Fprintf(&b, "  %s\n", n)
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
 }
@@ -184,8 +188,22 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 		return res, err
 	}
 	res.Config = c
-	res.Start = "docker " + strings.Join(append(ComposeArgs(c), "up", "-d", "--build"), " ")
+	res.Next = nextSteps(c, opts.Dir)
 	return res, nil
+}
+
+// nextSteps returns the commands that start the new setup. They need --dir
+// unless the setup folder is the one that the commands find by default.
+func nextSteps(c Config, dir string) []string {
+	flag := ""
+	if d := filepath.Clean(dir); d != DefaultDir && d != "." {
+		flag = " --dir " + dir
+	}
+	var next []string
+	if stack.NeedsNuxeo(c.Profile) {
+		next = append(next, fmt.Sprintf("openarch app doctor --profile %s%s   (nuxeo-deployment must run first)", c.Profile, flag))
+	}
+	return append(next, "openarch app models pull"+flag, "openarch app up"+flag)
 }
 
 // fetchUpstream fetches the pinned upstream commit into upstream/. It reports

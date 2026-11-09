@@ -174,6 +174,21 @@ func TestConfigLoad(t *testing.T) {
 	}
 }
 
+func TestNextSteps(t *testing.T) {
+	for _, c := range []struct {
+		profile, dir, want string
+	}{
+		{"alfresco", "openarch-app", "openarch app models pull,openarch app up"},
+		{"alfresco", "./openarch-app/", "openarch app models pull,openarch app up"},
+		{"alfresco", "my-app", "openarch app models pull --dir my-app,openarch app up --dir my-app"},
+		{"full", "openarch-app", "openarch app doctor --profile full   (nuxeo-deployment must run first),openarch app models pull,openarch app up"},
+	} {
+		if got := strings.Join(nextSteps(Config{Profile: c.profile}, c.dir), ","); got != c.want {
+			t.Errorf("%s %s: %q, want %q", c.profile, c.dir, got, c.want)
+		}
+	}
+}
+
 func TestContextHost(t *testing.T) {
 	for in, want := range map[string]string{"127.0.0.1": "127.0.0.1", "0.0.0.0": "127.0.0.1", "::": "127.0.0.1", "192.168.1.5": "192.168.1.5", "::1": "[::1]"} {
 		if got := contextHost(in); got != want {
@@ -271,7 +286,7 @@ func TestInit(t *testing.T) {
 	if !strings.Contains(set, "config set --name app -s http://127.0.0.1:8090 -u admin --password-stdin --no-verify") || strings.Contains(set, password) {
 		t.Errorf("config set call = %q", set)
 	}
-	if res.OpenArchURL != "http://127.0.0.1:8090" || !strings.HasPrefix(res.Start, "docker compose -p openarch-app") || !strings.HasSuffix(res.Start, "up -d --build") {
+	if res.OpenArchURL != "http://127.0.0.1:8090" || strings.Join(res.Next, ",") != "openarch app models pull --dir "+dir+",openarch app up --dir "+dir {
 		t.Errorf("result = %+v", res)
 	}
 

@@ -14,6 +14,10 @@ import (
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
 )
 
+// DefaultDir is the setup folder that 'init' creates, and that the other
+// commands use, when no folder is given.
+const DefaultDir = "openarch-app"
+
 // Names of the files and folders in a setup folder.
 const (
 	ConfigFile   = "openarch-app.yaml"
