@@ -2,8 +2,8 @@ package cli
 
 import (
 	"os"
-	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -37,8 +37,8 @@ Checks: docker.cli, docker.daemon, docker.compose, docker.memory, git.cli,
 model.runner, model.url, model.embedding, model.chat, port.<n> (one for each
 port), nuxeo.deployment (profiles nuxeo and full), openarch.cli.
 
-The default ports are ` + strconv.Itoa(stack.ProxyPort) + ` (the proxy) and ` + strconv.Itoa(stack.OpenArchPort) + ` (Hyland OpenArch), plus ` + strconv.Itoa(stack.Alfresco2Port) + `
-with --extra alfresco-2. The memory thresholds are estimates.`,
+The default ports are ` + ports(stack.HostPorts(nil)) + ` (the proxy and Hyland OpenArch), plus
+` + ports([]int{stack.Alfresco2Port, stack.Alfresco2HTTPSPort}) + ` with --extra alfresco-2. The memory thresholds are estimates.`,
 		Example: `  openarch app doctor
   openarch app doctor --profile full --extra alfresco-2 --dir ./my-app
   openarch app doctor --llm-model ai/qwen2.5 --output json
@@ -48,16 +48,11 @@ with --extra alfresco-2. The memory thresholds are estimates.`,
 			if err := stack.ValidProfile(opts.Profile); err != nil {
 				return err
 			}
-			for _, e := range opts.Extras {
-				if err := stack.ValidExtra(e); err != nil {
-					return err
-				}
+			if err := stack.ValidExtras(opts.Profile, opts.Extras); err != nil {
+				return err
 			}
 			if len(opts.Ports) == 0 {
-				opts.Ports = []int{stack.ProxyPort, stack.OpenArchPort}
-				if slices.Contains(opts.Extras, "alfresco-2") {
-					opts.Ports = append(opts.Ports, stack.Alfresco2Port)
-				}
+				opts.Ports = stack.HostPorts(opts.Extras)
 			}
 			opts.OpenArchBin = os.Getenv(envBin)
 			report, err := doctor.Run(cmd.Context(), app.doctorEnv(), opts)
@@ -85,4 +80,13 @@ with --extra alfresco-2. The memory thresholds are estimates.`,
 	_ = cmd.RegisterFlagCompletionFunc("profile", cobra.FixedCompletions(stack.Profiles, cobra.ShellCompDirectiveNoFileComp))
 	_ = cmd.RegisterFlagCompletionFunc("extra", cobra.FixedCompletions(stack.Extras, cobra.ShellCompDirectiveNoFileComp))
 	return cmd
+}
+
+// ports joins port numbers with commas.
+func ports(ps []int) string {
+	s := make([]string, len(ps))
+	for i, p := range ps {
+		s[i] = strconv.Itoa(p)
+	}
+	return strings.Join(s, ", ")
 }

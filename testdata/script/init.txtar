@@ -1,0 +1,28 @@
+# Usage errors stop init before it writes anything.
+! exec openarch-app init --profile demo
+stderr 'unknown profile "demo"'
+! exists openarch-app
+
+! exec openarch-app init --profile nuxeo --extra alfresco-2
+stderr 'the alfresco-2 extra needs the alfresco or full profile'
+
+! exec openarch-app init --bind-ip localhost
+stderr 'invalid --bind-ip localhost'
+
+! exec openarch-app init a b
+stderr 'accepts at most 1 arg'
+
+# A folder that is already a setup is refused.
+! exec openarch-app init done -o json
+stdout '"code": "usage"'
+stdout 'is already a setup folder'
+
+# An existing openarch context is refused unless --force, and nothing is written.
+env FAKE_CONTEXT_EXISTS=1
+! exec openarch-app init fresh
+stderr 'the openarch context "app" already exists'
+stderr 'Use --context-name with another name, or --force to replace it.'
+! exists fresh
+
+-- done/openarch-app.yaml --
+schemaVersion: 1

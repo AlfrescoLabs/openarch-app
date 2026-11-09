@@ -14,6 +14,7 @@ import (
 
 	"github.com/AlfrescoLabs/openarch-app/internal/doctor"
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
+	"github.com/AlfrescoLabs/openarch-app/internal/setup"
 	"github.com/AlfrescoLabs/openarch-app/internal/term"
 )
 
@@ -51,10 +52,12 @@ type App struct {
 	Log     *slog.Logger
 	// doctorEnv gives the system access of the doctor checks. Tests replace it.
 	doctorEnv func() doctor.Env
+	// setupEnv gives the system access of init. Tests replace it.
+	setupEnv func() setup.Env
 }
 
 func newApp(s Streams) *App {
-	return &App{Streams: s, doctorEnv: doctor.SystemEnv}
+	return &App{Streams: s, doctorEnv: doctor.SystemEnv, setupEnv: setup.SystemEnv}
 }
 
 // Interactive reports whether commands may prompt the user.
@@ -139,7 +142,7 @@ Exit codes: 0 ok, 1 error, 2 bad usage, 3 prerequisite missing,
 	pf.BoolVarP(&app.Opts.Verbose, "verbose", "v", envBool(envVerbose), "print debug logs to stderr (env "+envVerbose+")")
 	pf.BoolVar(&app.Opts.NoColor, "no-color", false, "disable colors (env NO_COLOR)")
 
-	root.AddCommand(newDoctorCmd(app), newVersionCmd(app))
+	root.AddCommand(newDoctorCmd(app), newInitCmd(app), newVersionCmd(app))
 	return root
 }
 

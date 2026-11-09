@@ -34,8 +34,9 @@ var profileMemory = map[string]memory{
 }
 
 // alfresco2Memory is added for the alfresco-2 extra: a second Alfresco,
-// Postgres, ActiveMQ, indexer and ingesters.
-var alfresco2Memory = memory{4 * gib, 6 * gib}
+// Postgres, ActiveMQ, indexer and ingesters. Upstream limits the JVM services
+// of both instances to 13.5 GB in total.
+var alfresco2Memory = memory{8 * gib, 10 * gib}
 
 const installDockerFix = "Install Docker Desktop: https://docs.docker.com/get-started/get-docker/"
 

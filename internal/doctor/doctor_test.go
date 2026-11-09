@@ -228,9 +228,9 @@ func TestMemoryByProfile(t *testing.T) {
 		{"nuxeo", nil, 8 * gib, OK},
 		{"full", nil, 12 * gib, Warn},
 		{"full", nil, 8 * gib, Fail},
-		{"alfresco", []string{"alfresco-2"}, 16 * gib, Warn},
-		{"alfresco", []string{"alfresco-2"}, 10 * gib, Fail},
-		{"alfresco", []string{"alfresco-2"}, 18 * gib, OK},
+		{"alfresco", []string{"alfresco-2"}, 18 * gib, Warn},
+		{"alfresco", []string{"alfresco-2"}, 14 * gib, Fail},
+		{"alfresco", []string{"alfresco-2"}, 22 * gib, OK},
 	}
 	for _, c := range cases {
 		f := newFake()

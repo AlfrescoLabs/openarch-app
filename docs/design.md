@@ -6,7 +6,7 @@ It is one Go binary. `openarch app ...` runs the `openarch-app` binary from `PAT
 
 Upstream is [AlfrescoLabs/content-lake-app-deployment](https://github.com/AlfrescoLabs/content-lake-app-deployment). Its repositories and variables use the name `content-lake`, and it names the Hyland OpenArch service `hxpr-app` (its clients use `HXPR_*` variables).
 
-Only `doctor` and `version` are built. The rest of this document is the design for the commands that come next. Flags of the built commands are in `openarch app <command> --help`.
+Only `doctor`, `init` and `version` are built. The rest of this document is the design for the commands that come next. Flags of the built commands are in `openarch app <command> --help`.
 
 ## Goals and non-goals
 
@@ -59,7 +59,7 @@ openarch-app/
 ```
 
 - `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 1`, the profile, the extras, the models, the bind IP, the name of the `openarch` context, and the build context SHAs of the last build. It holds no secrets.
-- `init` writes the generated files once. Generated files never go inside `upstream/`.
+- `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
 - Upstream expects `nuxeo-deployment` next to its own repository (`../nuxeo-deployment`). The nuxeo-deployment project publishes Nuxeo on host port 8081. In the first version the user clones it at the commit that `doctor` prints, and starts it.
 
@@ -112,15 +112,15 @@ Upstream builds some images from remote Git contexts. `.env.local` sets each var
 | Secrets in `.env.local` | fixed values | random (see Credentials) | `init --default-secrets` |
 | OpenArch users in `openarch-users.yml` | `admin:password` | one admin, random password | `init --default-users` |
 
-`USE_HTTPS` is always `false` in `.env.local`. Upstream turns TLS on only when a certificate exists, and the ports bind to `127.0.0.1` by default.
+`USE_HTTPS` is always `false` in `.env.local`. Upstream turns TLS on only when a certificate exists, and the ports bind to `127.0.0.1` by default. The proxy still publishes port 443.
 
 ## Commands
 
 | Command | Built | What it does |
 | --- | --- | --- |
 | `version` | yes | Prints the version. |
-| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the profile, Docker Model Runner and its URL, the models, free ports, `nuxeo-deployment` for the Nuxeo profiles, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
-| `init [dir]` | no | Creates the setup folder, fetches upstream, writes the generated files, and adds the `openarch` context. |
+| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the profile, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8082 and 8445 with `alfresco-2`), `nuxeo-deployment` for the Nuxeo profiles, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
+| `init [dir]` | yes | Creates the setup folder, fetches upstream, writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the `docker compose` command that starts the stack. |
 | `up`, `down`, `status`, `logs` | no | Run `docker compose up -d`, `down`, `ps` and `logs` with the profile and extras of `openarch-app.yaml`. `down` keeps the volumes. `up` prints the endpoints. |
 | `models pull` | no | Pulls the embedding model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. |
 | `smoke-test` | no | Runs the upstream `test/smoke-test.sh` against the running stack. |
@@ -135,7 +135,8 @@ Flags of `init`:
 | `--embedding-model` | `ai/mxbai-embed-large` | Embedding model |
 | `--bind-ip` | `127.0.0.1` | Host address of every published port |
 | `--context-name` | `app` | Name of the `openarch` context |
-| `--default-secrets`, `--default-users` | off | Keep the upstream secrets or users |
+| `--default-secrets` | off | Keep the upstream secrets |
+| `--default-users` | off | Keep the upstream OpenArch users (`admin:password`) and `HXPR_PASSWORD` |
 | `--force` | off | Replace an existing context with the same name |
 
 ## Profiles
@@ -145,7 +146,7 @@ Flags of `init`:
 | `alfresco` | profile | Hyland OpenArch, the bundled Alfresco and its ingesters, the RAG service, the Alfresco UI and the proxy |
 | `nuxeo` | profile | Hyland OpenArch, the Nuxeo ingesters, the RAG service and the proxy. Needs nuxeo-deployment. |
 | `full` | profile | `alfresco` and `nuxeo` together. Needs nuxeo-deployment. |
-| `alfresco-2` | extra (an upstream override file) | A second Alfresco with its own ingesters, on host port 8082 |
+| `alfresco-2` | extra (an upstream override file) | A second Alfresco with its own ingesters, on host ports 8082 and 8445. Only with `alfresco` or `full`. Upstream limits the JVM memory of both instances to 13.5 GB in total. |
 
 ## Limits
 
