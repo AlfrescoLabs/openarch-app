@@ -1,0 +1,76 @@
+version: 2
+
+project_name: openarch-app
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: openarch-app
+    main: ./cmd/openarch-app
+    binary: openarch-app
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/AlfrescoLabs/openarch-app/internal/version.Version={{ .Version }}
+      - -X github.com/AlfrescoLabs/openarch-app/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/AlfrescoLabs/openarch-app/internal/version.Date={{ .CommitDate }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - docs/design.md
+
+checksum:
+  name_template: checksums.txt
+
+# One SBOM (SPDX JSON, made by syft) per archive.
+sboms:
+  - artifacts: archive
+
+# Keyless signature of checksums.txt with cosign, from the GitHub Actions OIDC
+# identity, in one Sigstore bundle file. goreleaser-action puts its own cosign
+# v2 first in PATH, which writes the legacy bundle format by default, so the
+# standard format is requested explicitly.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--new-bundle-format=true"
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: ""
+  filters:
+    exclude:
+      - "^Merge "
+
+# The release is a draft: it is visible only to maintainers until someone publishes it on GitHub.
+release:
+  github:
+    owner: AlfrescoLabs
+    name: openarch-app
+  draft: true
+  prerelease: auto
+  name_template: "openarch-app {{ .Version }}"

@@ -11,6 +11,33 @@ The plugin wraps the upstream [content-lake-app-deployment](https://github.com/A
 
 In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `down` and `version`.
 
+## Install
+
+Download the archive for your system from the releases of this repository: Linux, macOS and Windows, on amd64 or arm64. Put `openarch-app` on your `PATH`, next to `openarch` (the CLI for OpenArch, 0.5.2 or later). The repository is private, so the download needs [GitHub CLI](https://cli.github.com/) with access to it:
+
+```sh
+VERSION=0.1.0
+OS=linux        # or darwin, windows
+ARCH=amd64      # or arm64
+gh release download "v$VERSION" -R AlfrescoLabs/openarch-app \
+  -p "openarch-app_${VERSION}_${OS}_${ARCH}.tar.gz" -p checksums.txt -p checksums.txt.sigstore.json
+sha256sum --ignore-missing -c checksums.txt     # on macOS: shasum -a 256 --ignore-missing -c checksums.txt
+tar xzf "openarch-app_${VERSION}_${OS}_${ARCH}.tar.gz"
+sudo mv openarch-app /usr/local/bin/
+openarch app version
+```
+
+On Windows, download the `.zip` archive and put `openarch-app.exe` in a folder on your `PATH`. The binaries are not signed with an Apple or Microsoft certificate: when a browser downloaded the file, run `xattr -d com.apple.quarantine openarch-app` once on macOS.
+
+`checksums.txt` is signed with [cosign](https://docs.sigstore.dev/) by the release workflow (keyless, with the GitHub Actions identity), and each archive has an SBOM (`.sbom.json`, SPDX):
+
+```sh
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity "https://github.com/AlfrescoLabs/openarch-app/.github/workflows/release.yml@refs/tags/v$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Run it
 
 Put `openarch-app` on `PATH`. The CLI for OpenArch then runs it as a plugin:

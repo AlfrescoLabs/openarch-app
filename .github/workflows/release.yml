@@ -1,0 +1,39 @@
+name: Release
+
+# Runs when a version tag is pushed. It creates a draft GitHub release: someone
+# must publish it by hand after a review.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the draft release and upload the files
+  id-token: write # keyless cosign signature
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - uses: sigstore/cosign-installer@v3
+      - uses: anchore/sbom-action/download-syft@v0
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The check that users run, on the bundle the release just signed. A
+      # failure here leaves only a draft that nobody should publish.
+      - name: Check the release signature
+        run: |
+          cosign verify-blob dist/checksums.txt \
+            --bundle dist/checksums.txt.sigstore.json \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
