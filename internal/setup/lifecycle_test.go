@@ -75,6 +75,16 @@ func (f *fakeDocker) env() Env {
 	}
 }
 
+// srcOf returns the sources of an upstream profile and extras, the shape of
+// most test cases.
+func srcOf(profile string, extras ...string) stack.Sources {
+	s, err := stack.SourcesOf(profile, extras)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
 func newSetup(t *testing.T, c Config) Setup {
 	t.Helper()
 	dir := t.TempDir()
@@ -95,8 +105,8 @@ func newSetup(t *testing.T, c Config) Setup {
 	if c.Upstream == "" {
 		c.Upstream = stack.UpstreamRef
 	}
-	if c.Profile == "" {
-		c.Profile = "alfresco"
+	if c.Sources == (stack.Sources{}) {
+		c.Sources = stack.Sources{Alfresco: 1}
 	}
 	if c.BindIP == "" {
 		c.BindIP = "127.0.0.1"
@@ -169,7 +179,7 @@ func TestUpFails(t *testing.T) {
 }
 
 func TestUpNeedsNuxeo(t *testing.T) {
-	s := newSetup(t, Config{Profile: "full"})
+	s := newSetup(t, Config{Sources: srcOf("full")})
 	f := &fakeDocker{}
 	if _, err := Up(context.Background(), f.env(), s, UpOptions{}, Streams{Err: io.Discard}); output.CodeOf(err) != output.ExitPrerequisite {
 		t.Fatalf("err = %v", err)
@@ -194,7 +204,7 @@ func TestUpNeedsNuxeo(t *testing.T) {
 }
 
 func TestEndpointsAlfresco2(t *testing.T) {
-	s := newSetup(t, Config{Extras: []string{"alfresco-2"}, BindIP: "0.0.0.0", Context: "app"})
+	s := newSetup(t, Config{Sources: srcOf("alfresco", "alfresco-2"), BindIP: "0.0.0.0", Context: "app"})
 	last := s.Endpoints()[len(s.Endpoints())-1]
 	if last.URL != "http://127.0.0.1:8082/" {
 		t.Errorf("last endpoint = %+v", last)
@@ -277,7 +287,7 @@ func TestModelsPull(t *testing.T) {
 }
 
 func TestSmokeTest(t *testing.T) {
-	s := newSetup(t, Config{Profile: "full"})
+	s := newSetup(t, Config{Sources: srcOf("full")})
 	f := &fakeDocker{scriptOut: "\x1b[0;32m[PASS]\x1b[0m a\n[PASS] b\n[SKIP] c\n"}
 	var out bytes.Buffer
 	res, err := SmokeTest(context.Background(), f.env(), s, &out, Streams{Err: io.Discard})
@@ -310,7 +320,7 @@ func TestUsesUpstreamAlfrescoAdmin(t *testing.T) {
 	if !newSetup(t, Config{}).UsesUpstreamAlfrescoAdmin() {
 		t.Error("a setup made before 0.2.0 is not reported")
 	}
-	for _, c := range []Config{{DefaultSecrets: true}, {Profile: "nuxeo"}} {
+	for _, c := range []Config{{DefaultSecrets: true}, {Sources: srcOf("nuxeo")}} {
 		if newSetup(t, c).UsesUpstreamAlfrescoAdmin() {
 			t.Errorf("%+v is reported", c)
 		}

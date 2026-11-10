@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
+	"github.com/AlfrescoLabs/openarch-app/internal/stack"
 )
 
 // DefaultDir is the setup folder that 'init' creates, and that the other
@@ -28,21 +29,23 @@ const (
 )
 
 // SchemaVersion is the version of openarch-app.yaml that this build writes.
-// Version 2 added managedNuxeo. 'upgrade' migrates a file of an older version.
+// Version 2 replaced profile and extras by the source counts, and added
+// managedNuxeo. 'upgrade' migrates a file of an older version.
 const SchemaVersion = 2
 
 // Config is openarch-app.yaml: the settings of a setup. It holds no secrets.
 type Config struct {
-	SchemaVersion  int      `yaml:"schemaVersion" json:"schemaVersion"`
-	Upstream       string   `yaml:"upstream" json:"upstream"`
-	Profile        string   `yaml:"profile" json:"profile"`
-	Extras         []string `yaml:"extras,omitempty" json:"extras,omitempty"`
-	LLMModel       string   `yaml:"llmModel" json:"llmModel"`
-	EmbeddingModel string   `yaml:"embeddingModel" json:"embeddingModel"`
-	BindIP         string   `yaml:"bindIP" json:"bindIP"`
-	Context        string   `yaml:"context" json:"context"`
-	DefaultSecrets bool     `yaml:"defaultSecrets,omitempty" json:"defaultSecrets,omitempty"`
-	DefaultUsers   bool     `yaml:"defaultUsers,omitempty" json:"defaultUsers,omitempty"`
+	SchemaVersion int    `yaml:"schemaVersion" json:"schemaVersion"`
+	Upstream      string `yaml:"upstream" json:"upstream"`
+	// Sources are the Alfresco and Nuxeo instances. Profile() and Extras() give
+	// the upstream profile and extras that run them.
+	stack.Sources  `yaml:",inline"`
+	LLMModel       string `yaml:"llmModel" json:"llmModel"`
+	EmbeddingModel string `yaml:"embeddingModel" json:"embeddingModel"`
+	BindIP         string `yaml:"bindIP" json:"bindIP"`
+	Context        string `yaml:"context" json:"context"`
+	DefaultSecrets bool   `yaml:"defaultSecrets,omitempty" json:"defaultSecrets,omitempty"`
+	DefaultUsers   bool   `yaml:"defaultUsers,omitempty" json:"defaultUsers,omitempty"`
 	// ManagedNuxeo means that init fetched nuxeo-deployment, so the plugin runs
 	// it in the same Compose project. A setup made before 0.3.0 has a
 	// nuxeo-deployment that the user started as a project of its own.
@@ -73,15 +76,65 @@ func LoadForUpgrade(dir string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(&c); err != nil {
+	var version struct {
+		SchemaVersion int `yaml:"schemaVersion"`
+	}
+	if err := yaml.Unmarshal(data, &version); err != nil {
 		return c, output.Usage(fmt.Sprintf("cannot read %s: %v", ConfigFile, err), "")
+	}
+	if version.SchemaVersion == 1 {
+		return loadVersion1(data)
+	}
+	if err := decodeStrict(data, &c); err != nil {
+		return c, err
 	}
 	if c.SchemaVersion < 1 || c.SchemaVersion > SchemaVersion {
 		return c, output.Usage(fmt.Sprintf("%s has schemaVersion %d, this build reads %d", ConfigFile, c.SchemaVersion, SchemaVersion), "Update openarch-app.")
 	}
 	return c, nil
+}
+
+// decodeStrict decodes data into v and refuses unknown fields.
+func decodeStrict(data []byte, v any) error {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(v); err != nil {
+		return output.Usage(fmt.Sprintf("cannot read %s: %v", ConfigFile, err), "")
+	}
+	return nil
+}
+
+// configVersion1 is openarch-app.yaml of 0.1.0 to 0.2.0: the upstream profile
+// and extras instead of the source counts.
+type configVersion1 struct {
+	SchemaVersion  int               `yaml:"schemaVersion"`
+	Upstream       string            `yaml:"upstream"`
+	Profile        string            `yaml:"profile"`
+	Extras         []string          `yaml:"extras,omitempty"`
+	LLMModel       string            `yaml:"llmModel"`
+	EmbeddingModel string            `yaml:"embeddingModel"`
+	BindIP         string            `yaml:"bindIP"`
+	Context        string            `yaml:"context"`
+	DefaultSecrets bool              `yaml:"defaultSecrets,omitempty"`
+	DefaultUsers   bool              `yaml:"defaultUsers,omitempty"`
+	BuiltContexts  map[string]string `yaml:"builtContexts,omitempty"`
+}
+
+// loadVersion1 reads a version 1 file into a Config that still has
+// SchemaVersion 1, so that only 'upgrade' accepts it. Its nuxeo-deployment is
+// the user's, so ManagedNuxeo stays false.
+func loadVersion1(data []byte) (Config, error) {
+	var v configVersion1
+	if err := decodeStrict(data, &v); err != nil {
+		return Config{}, err
+	}
+	sources, err := stack.SourcesOf(v.Profile, v.Extras)
+	if err != nil {
+		return Config{}, output.Usage(fmt.Sprintf("cannot read %s: %v", ConfigFile, err), "")
+	}
+	return Config{SchemaVersion: 1, Upstream: v.Upstream, Sources: sources, LLMModel: v.LLMModel,
+		EmbeddingModel: v.EmbeddingModel, BindIP: v.BindIP, Context: v.Context, DefaultSecrets: v.DefaultSecrets,
+		DefaultUsers: v.DefaultUsers, BuiltContexts: v.BuiltContexts}, nil
 }
 
 // Save writes openarch-app.yaml into the setup folder dir.

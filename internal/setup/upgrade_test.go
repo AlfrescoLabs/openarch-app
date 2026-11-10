@@ -28,7 +28,7 @@ func withPreviousRef(t *testing.T) {
 // URLs, and other keys that an upgrade must keep.
 func oldSetup(t *testing.T, profile string) Setup {
 	t.Helper()
-	s := newSetup(t, Config{Upstream: oldRef, Profile: profile, Context: "app"})
+	s := newSetup(t, Config{Upstream: oldRef, Sources: srcOf(profile), Context: "app"})
 	local := "# Written by 'openarch app init'.\nBIND_IP=127.0.0.1\nHXPR_PASSWORD=Kept-Pass1\n"
 	for _, g := range stack.GitContexts {
 		local += g.Var + "=" + g.Repo + "#" + oldRef + "\n"
@@ -285,9 +285,11 @@ func TestRecoverSwap(t *testing.T) {
 func TestUpgradeMigratesVersion1(t *testing.T) {
 	// A setup of 0.2.0: the current upstream commit, version 1, and a
 	// nuxeo-deployment that the user started as a project of its own.
-	s := newSetup(t, Config{Profile: "full", Context: "app"})
-	s.Config.SchemaVersion = 1
-	if err := Save(s.Dir, s.Config); err != nil {
+	s := newSetup(t, Config{Sources: srcOf("full"), Context: "app"})
+	// The file as 0.2.0 wrote it: the upstream profile and extras.
+	v1 := "schemaVersion: 1\nupstream: " + stack.UpstreamRef + "\nprofile: full\nextras:\n  - alfresco-2\n" +
+		"llmModel: m\nembeddingModel: e\nbindIP: 127.0.0.1\ncontext: app\n"
+	if err := os.WriteFile(filepath.Join(s.Dir, ConfigFile), []byte(v1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Open(s.Dir); err == nil {
@@ -304,8 +306,12 @@ func TestUpgradeMigratesVersion1(t *testing.T) {
 		t.Fatalf("%+v, %v", res, err)
 	}
 	c, err := Load(s.Dir)
-	if err != nil || c.SchemaVersion != SchemaVersion || c.ManagedNuxeo {
+	if err != nil || c.SchemaVersion != SchemaVersion || c.ManagedNuxeo || c.Sources != (stack.Sources{Alfresco: 2, Nuxeo: 1}) {
 		t.Errorf("config = %+v, %v", c, err)
+	}
+	// The migrated file has the counts and no upstream keys.
+	if got := string(mustRead(t, filepath.Join(s.Dir, ConfigFile))); !strings.Contains(got, "alfresco: 2\nnuxeo: 1\n") || strings.Contains(got, "profile") {
+		t.Errorf("file = %s", got)
 	}
 	for _, call := range f.calls {
 		if strings.Contains(call, "fetch") {
@@ -316,7 +322,7 @@ func TestUpgradeMigratesVersion1(t *testing.T) {
 
 func TestUpgradeManagedNuxeo(t *testing.T) {
 	// A managed nuxeo-deployment at an older commit moves with the upgrade.
-	s := newSetup(t, Config{Profile: "nuxeo", ManagedNuxeo: true, Context: "app"})
+	s := newSetup(t, Config{Sources: srcOf("nuxeo"), ManagedNuxeo: true, Context: "app"})
 	nd := filepath.Join(s.Dir, stack.NuxeoDeploymentDir)
 	if err := os.MkdirAll(nd, 0o755); err != nil {
 		t.Fatal(err)

@@ -89,11 +89,7 @@ type InitResult struct {
 // WriteText writes the human-readable form.
 func (r InitResult) WriteText(w io.Writer) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Created the App for OpenArch setup in %s (profile %s", r.Dir, r.Config.Profile)
-	for _, e := range r.Config.Extras {
-		fmt.Fprintf(&b, ", extra %s", e)
-	}
-	b.WriteString(").\n")
+	fmt.Fprintf(&b, "Created the App for OpenArch setup in %s (%s).\n", r.Dir, r.Config.Sources)
 	fmt.Fprintf(&b, "Upstream commit %s.\n", r.Config.Upstream)
 	for _, f := range r.Reused {
 		fmt.Fprintf(&b, "Kept the existing %s.\n", f)
@@ -115,11 +111,8 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 	c := opts.Settings
 	c.SchemaVersion = SchemaVersion
 	c.Upstream = stack.UpstreamRef
-	c.ManagedNuxeo = stack.NeedsNuxeo(c.Profile)
-	if err := stack.ValidProfile(c.Profile); err != nil {
-		return InitResult{}, err
-	}
-	if err := stack.ValidExtras(c.Profile, c.Extras); err != nil {
+	c.ManagedNuxeo = c.Nuxeo > 0
+	if err := c.Valid(); err != nil {
 		return InitResult{}, err
 	}
 	dir, err := filepath.Abs(opts.Dir)

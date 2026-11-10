@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -53,7 +52,7 @@ func newUpCmd(app *App) *cobra.Command {
 		Use:   "up",
 		Short: "Start the App for OpenArch stack",
 		Long: `Start the stack of the setup folder with 'docker compose up -d', with the
-profile and extras of openarch-app.yaml. Compose writes its progress to stderr.
+sources of openarch-app.yaml. Compose writes its progress to stderr.
 
 up builds the images from the pinned build contexts on the first start, and
 again after 'openarch app upgrade'. The first build takes several minutes. Then
@@ -63,13 +62,13 @@ prints the endpoints.
 After an update of openarch-app that pins another upstream commit, up refuses
 the setup until 'openarch app upgrade' has moved it.
 
-With the alfresco-2 extra, rag-service needs the repository id of each Alfresco
+With two Alfresco instances, rag-service needs the repository id of each one
 (ALFRESCO_1_SOURCE_ID and ALFRESCO_2_SOURCE_ID in .env.local). The first up
 starts the two Alfresco instances alone, waits for them even with --no-wait,
 records their ids, and then starts the rest. Every later up checks the ids
 again after the wait, so they follow a repository that 'down -v' replaced.
 
-For the nuxeo and full profiles, Nuxeo runs in the same Compose project, from
+With Nuxeo, Nuxeo runs in the same Compose project, from
 the nuxeo-deployment folder that init fetched. Its first start builds Nuxeo from
 source, which takes long. A setup made before 0.3.0 keeps its nuxeo-deployment
 as a project of its own: start that one first.`,
@@ -88,7 +87,7 @@ as a project of its own: start that one first.`,
 				return err
 			}
 			opts.Wait = !noWait
-			if noWait && slices.Contains(s.Config.Extras, "alfresco-2") {
+			if noWait && s.Config.Alfresco >= 2 {
 				app.Printer.Warn("With --no-wait, up does not check that the RAG source ids still match the two Alfresco repositories. After a 'down -v', run 'openarch app up' without it.")
 			}
 			env := app.setupEnv()
@@ -253,10 +252,11 @@ func newSmokeTestCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "smoke-test",
 		Short: "Run the upstream test suite against the running stack",
-		Long: `Run the upstream test suite of the profile against the running stack:
-test/test-alfresco.sh (alfresco), test/test-nuxeo.sh (nuxeo) or
-test/test-rag-full.sh (full), the suites of the upstream test/run-tests.sh.
-With the alfresco-2 extra it also runs test/test-two-alfresco.sh. The suites create test documents and remove them.
+		Long: `Run the upstream test suite of the sources against the running stack:
+test/test-alfresco.sh (Alfresco only), test/test-nuxeo.sh (Nuxeo only) or
+test/test-rag-full.sh (Alfresco and Nuxeo), the suites of the upstream
+test/run-tests.sh. With two Alfresco instances it also runs
+test/test-two-alfresco.sh. The suites create test documents and remove them.
 They need bash, curl and jq.
 
 In text mode the suite output goes to stdout; in JSON mode it goes to stderr,

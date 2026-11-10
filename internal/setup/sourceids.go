@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -37,7 +36,7 @@ var sourceInstances = []sourceInstance{
 // missingSourceIDs reports whether the setup has the alfresco-2 extra and a
 // source id is still empty. rag-service refuses to start then.
 func (s Setup) missingSourceIDs() bool {
-	if !slices.Contains(s.Config.Extras, "alfresco-2") {
+	if s.Config.Alfresco < 2 {
 		return false
 	}
 	values, err := s.env()
@@ -59,7 +58,7 @@ func (s Setup) missingSourceIDs() bool {
 // ids follow a repository that 'down -v' replaced. It returns the ids, or nil
 // when the setup has no second Alfresco.
 func SyncSourceIDs(ctx context.Context, env Env, s Setup, st Streams, waitTimeout int, restart bool) (map[string]string, error) {
-	if !slices.Contains(s.Config.Extras, "alfresco-2") {
+	if s.Config.Alfresco < 2 {
 		return nil, nil
 	}
 	values, err := s.env()

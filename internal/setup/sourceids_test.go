@@ -29,7 +29,7 @@ func upCalls(calls []string) []string {
 
 func twoAlfrescoSetup(t *testing.T) Setup {
 	t.Helper()
-	s := newSetup(t, Config{Extras: []string{"alfresco-2"}})
+	s := newSetup(t, Config{Sources: srcOf("alfresco", "alfresco-2")})
 	local := string(mustRead(t, filepath.Join(s.Dir, EnvFile))) + "ALFRESCO_ADMIN_PASSWORD=Pw-One-1\nALFRESCO_2_INTERNAL_PASSWORD=Pw-Two-2\n"
 	if err := os.WriteFile(filepath.Join(s.Dir, EnvFile), []byte(local), 0o600); err != nil {
 		t.Fatal(err)

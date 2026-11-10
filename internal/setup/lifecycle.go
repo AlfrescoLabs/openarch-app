@@ -85,17 +85,17 @@ func (s Setup) Endpoints() []Endpoint {
 	host := contextHost(s.Config.BindIP)
 	base := "http://" + host
 	var e []Endpoint
-	if s.Config.Profile != "nuxeo" {
+	if s.Config.Alfresco > 0 {
 		e = append(e, Endpoint{"Alfresco UI (ACA)", base + "/aca/"}, Endpoint{"Alfresco repository", base + "/alfresco/"})
 	}
-	if stack.NeedsNuxeo(s.Config.Profile) {
+	if s.Config.Nuxeo > 0 {
 		e = append(e, Endpoint{"Nuxeo", base + "/nuxeo/"})
 	}
 	e = append(e,
 		Endpoint{"RAG API", base + "/api/rag/"},
 		Endpoint{"MCP server", base + "/mcp"},
 		Endpoint{"Hyland OpenArch (openarch --context " + s.Config.Context + ")", fmt.Sprintf("%s:%d", base, stack.OpenArchPort)})
-	if slices.Contains(s.Config.Extras, "alfresco-2") {
+	if s.Config.Alfresco >= 2 {
 		e = append(e, Endpoint{"Second Alfresco (alfresco-2)", fmt.Sprintf("%s:%d/", base, stack.Alfresco2Port)})
 	}
 	return e
@@ -111,9 +111,8 @@ type UpOptions struct {
 
 // UpResult describes a started stack.
 type UpResult struct {
-	Dir       string     `json:"dir"`
-	Profile   string     `json:"profile"`
-	Extras    []string   `json:"extras,omitempty"`
+	Dir string `json:"dir"`
+	stack.Sources
 	Built     bool       `json:"built"`
 	Endpoints []Endpoint `json:"endpoints"`
 	// SourceIDs are the repository ids of the two Alfresco instances of the
@@ -124,7 +123,7 @@ type UpResult struct {
 // WriteText writes the human-readable form.
 func (r UpResult) WriteText(w io.Writer) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "App for OpenArch is up (profile %s).\n\n", r.Profile)
+	fmt.Fprintf(&b, "App for OpenArch is up (%s).\n\n", r.Sources)
 	for _, e := range r.Endpoints {
 		fmt.Fprintf(&b, "%s\t%s\n", e.Name, e.URL)
 	}
@@ -161,7 +160,7 @@ func (s Setup) NeedsBuild() bool {
 
 // CheckNuxeo fails when the profile needs nuxeo-deployment and it is missing.
 func (s Setup) CheckNuxeo() error {
-	if !stack.NeedsNuxeo(s.Config.Profile) {
+	if s.Config.Nuxeo == 0 {
 		return nil
 	}
 	if info, err := os.Stat(filepath.Join(s.Dir, stack.NuxeoDeploymentDir)); err == nil && info.IsDir() {
@@ -169,10 +168,10 @@ func (s Setup) CheckNuxeo() error {
 	}
 	if s.Config.ManagedNuxeo {
 		dir := filepath.Join(s.Dir, stack.NuxeoDeploymentDir)
-		return output.NewError(output.ExitPrerequisite, fmt.Sprintf("profile %s needs %s, which init fetched and is now missing", s.Config.Profile, dir),
+		return output.NewError(output.ExitPrerequisite, fmt.Sprintf("Nuxeo needs %s, which init fetched and is now missing", dir),
 			fmt.Sprintf("Fetch it again: git clone %s %s && git -C %s checkout --detach %s", stack.NuxeoDeploymentURL, dir, dir, stack.NuxeoDeploymentRef))
 	}
-	return output.NewError(output.ExitPrerequisite, fmt.Sprintf("profile %s needs %s in %s", s.Config.Profile, stack.NuxeoDeploymentDir, s.Dir),
+	return output.NewError(output.ExitPrerequisite, fmt.Sprintf("Nuxeo needs %s in %s", stack.NuxeoDeploymentDir, s.Dir),
 		"Clone nuxeo-deployment there and start it, as for setups made before 0.3.0.")
 }
 
@@ -180,7 +179,7 @@ func (s Setup) CheckNuxeo() error {
 // has the upstream admin password, without the user having asked for it with
 // --default-secrets. Setups made before 0.2.0 have it.
 func (s Setup) UsesUpstreamAlfrescoAdmin() bool {
-	if s.Config.Profile == "nuxeo" || s.Config.DefaultSecrets {
+	if s.Config.Alfresco == 0 || s.Config.DefaultSecrets {
 		return false
 	}
 	values, err := s.env()
@@ -201,7 +200,7 @@ func (s Setup) MissingModels(ctx context.Context, env Env) []string {
 
 // Up starts the stack. Compose writes its progress to st.Err.
 func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpResult, error) {
-	res := UpResult{Dir: s.Dir, Profile: s.Config.Profile, Extras: s.Config.Extras}
+	res := UpResult{Dir: s.Dir, Sources: s.Config.Sources}
 	if err := s.CheckNuxeo(); err != nil {
 		return res, err
 	}
@@ -287,8 +286,8 @@ func (v Service) OK() bool {
 
 // StatusResult lists the services of the stack.
 type StatusResult struct {
-	Dir      string    `json:"dir"`
-	Profile  string    `json:"profile"`
+	Dir string `json:"dir"`
+	stack.Sources
 	Services []Service `json:"services"`
 	Healthy  bool      `json:"healthy"`
 }
@@ -313,7 +312,7 @@ func (r StatusResult) WriteText(w io.Writer) error {
 
 // Status lists the services of the stack.
 func Status(ctx context.Context, env Env, s Setup) (StatusResult, error) {
-	res := StatusResult{Dir: s.Dir, Profile: s.Config.Profile, Services: []Service{}}
+	res := StatusResult{Dir: s.Dir, Sources: s.Config.Sources, Services: []Service{}}
 	out, err := env.Run(ctx, s.Dir, nil, "docker", s.compose("ps", "-a", "--format", "json")...)
 	if err != nil {
 		return res, err
@@ -499,8 +498,8 @@ var smokeScripts = map[string]string{
 // stack. The suite writes its output to out. The suites take the Alfresco and
 // Nuxeo logins as environment variables.
 func SmokeTest(ctx context.Context, env Env, s Setup, out io.Writer, st Streams) (SmokeResult, error) {
-	scripts := []string{smokeScripts[s.Config.Profile]}
-	if slices.Contains(s.Config.Extras, "alfresco-2") {
+	scripts := []string{smokeScripts[s.Config.Profile()]}
+	if s.Config.Alfresco >= 2 {
 		// It checks what the profile suite cannot: two sources, their ids and
 		// the permissions of each.
 		scripts = append(scripts, "test/test-two-alfresco.sh")

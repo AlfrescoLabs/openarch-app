@@ -12,8 +12,8 @@ import (
 )
 
 func newInitCmd(app *App) *cobra.Command {
+	var sf sourceFlags
 	opts := setup.InitOptions{Settings: setup.Config{
-		Profile:        stack.DefaultProfile,
 		LLMModel:       stack.DefaultLLMModel,
 		EmbeddingModel: stack.DefaultEmbeddingModel,
 		BindIP:         "127.0.0.1",
@@ -38,17 +38,25 @@ password on stdin. The ports bind to 127.0.0.1 unless --bind-ip says otherwise.
 init writes .env.local once: the databases keep the passwords of their first
 start. If init fails, run it again: it keeps upstream/ and .env.local.
 
-The nuxeo and full profiles need nuxeo-deployment in the setup folder: run
-'openarch app doctor --profile nuxeo --dir <dir>' for the steps.`,
-		Example: `  openarch app init
-  openarch app init ./my-app --profile full --extra alfresco-2
-  openarch app init --llm-model ai/qwen2.5 --output json`,
+--alfresco and --nuxeo say how many instances of each source the setup runs:
+at most 2 Alfresco and 1 Nuxeo, and at least one source. With Nuxeo, init also
+fetches nuxeo-deployment, and Nuxeo runs in the same stack.`,
+		Example: `  openarch app init                            # one Alfresco
+  openarch app init --alfresco 2               # two Alfresco instances
+  openarch app init --alfresco 1 --nuxeo 1     # one Alfresco and one Nuxeo
+  openarch app init --alfresco 0 --nuxeo 1     # one Nuxeo
+  openarch app init ./my-app --llm-model ai/qwen2.5 --output json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Dir = defaultSetupDir
 			if len(args) == 1 {
 				opts.Dir = args[0]
 			}
+			sources, err := sf.sources(cmd, app.Printer)
+			if err != nil {
+				return err
+			}
+			opts.Settings.Sources = sources
 			if net.ParseIP(opts.Settings.BindIP) == nil {
 				return output.Usage("invalid --bind-ip "+opts.Settings.BindIP, "Use an IP address, such as 127.0.0.1 or 0.0.0.0.")
 			}
@@ -60,10 +68,9 @@ The nuxeo and full profiles need nuxeo-deployment in the setup folder: run
 			return app.Printer.Print(res)
 		},
 	}
+	addSourceFlags(cmd, &sf)
 	f := cmd.Flags()
 	s := &opts.Settings
-	f.StringVar(&s.Profile, "profile", s.Profile, "upstream profile: alfresco, nuxeo or full")
-	f.StringSliceVar(&s.Extras, "extra", nil, "opt-in addition: alfresco-2 (repeatable)")
 	f.StringVar(&s.LLMModel, "llm-model", s.LLMModel, "chat model in Docker Model Runner")
 	f.StringVar(&s.EmbeddingModel, "embedding-model", s.EmbeddingModel, "embedding model in Docker Model Runner")
 	f.StringVar(&s.BindIP, "bind-ip", s.BindIP, "host address of every published port")
@@ -71,7 +78,5 @@ The nuxeo and full profiles need nuxeo-deployment in the setup folder: run
 	f.BoolVar(&s.DefaultSecrets, "default-secrets", false, "keep the upstream secrets instead of random ones")
 	f.BoolVar(&s.DefaultUsers, "default-users", false, "keep the upstream OpenArch users (admin:password)")
 	f.BoolVar(&opts.Force, "force", false, "replace an openarch context with the same name")
-	_ = cmd.RegisterFlagCompletionFunc("profile", cobra.FixedCompletions(stack.Profiles, cobra.ShellCompDirectiveNoFileComp))
-	_ = cmd.RegisterFlagCompletionFunc("extra", cobra.FixedCompletions(stack.Extras, cobra.ShellCompDirectiveNoFileComp))
 	return cmd
 }

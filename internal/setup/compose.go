@@ -2,7 +2,6 @@ package setup
 
 import (
 	"path/filepath"
-	"slices"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/stack"
 )
@@ -13,15 +12,15 @@ func ComposeArgs(c Config) []string {
 	args := []string{"compose", "-p", stack.ProjectName, "--project-directory", UpstreamDir,
 		"--env-file", filepath.Join(UpstreamDir, ".env"), "--env-file", EnvFile,
 		"-f", filepath.Join(UpstreamDir, "compose.yaml")}
-	if slices.Contains(c.Extras, "alfresco-2") {
+	if c.Alfresco >= 2 {
 		args = append(args, "-f", filepath.Join(UpstreamDir, "compose.alfresco-2.yaml"))
 	}
-	if c.ManagedNuxeo && stack.NeedsNuxeo(c.Profile) {
+	if c.ManagedNuxeo && c.Nuxeo > 0 {
 		// Runs ../nuxeo-deployment (the folder of the setup) in this project.
 		args = append(args, "-f", filepath.Join(UpstreamDir, stack.NuxeoDeploymentFile))
 	}
-	args = append(args, "-f", OverrideFile, "--profile", c.Profile)
-	for _, e := range c.Extras {
+	args = append(args, "-f", OverrideFile, "--profile", c.Profile())
+	for _, e := range c.Extras() {
 		args = append(args, "--profile", e)
 	}
 	return args

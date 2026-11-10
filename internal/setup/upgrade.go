@@ -281,7 +281,7 @@ func recoverSwap(dir string) error {
 // nuxeoWarnings returns a warning when a Nuxeo profile uses a nuxeo-deployment
 // that the user manages and that is not at the commit of this build.
 func nuxeoWarnings(ctx context.Context, env Env, s Setup) []string {
-	if !stack.NeedsNuxeo(s.Config.Profile) || s.Config.ManagedNuxeo {
+	if s.Config.Nuxeo == 0 || s.Config.ManagedNuxeo {
 		return nil
 	}
 	nd := filepath.Join(s.Dir, stack.NuxeoDeploymentDir)

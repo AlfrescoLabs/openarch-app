@@ -157,7 +157,7 @@ func TestRenderOverride(t *testing.T) {
 }
 
 func TestComposeArgs(t *testing.T) {
-	got := strings.Join(ComposeArgs(Config{Profile: "full", Extras: []string{"alfresco-2"}}), " ")
+	got := strings.Join(ComposeArgs(Config{Sources: srcOf("full", "alfresco-2")}), " ")
 	want := strings.Join([]string{"compose -p openarch-app --project-directory upstream",
 		"--env-file " + filepath.Join("upstream", ".env") + " --env-file .env.local",
 		"-f " + filepath.Join("upstream", "compose.yaml") + " -f " + filepath.Join("upstream", "compose.alfresco-2.yaml"),
@@ -166,11 +166,11 @@ func TestComposeArgs(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 	// A managed nuxeo-deployment runs in the same project.
-	got = strings.Join(ComposeArgs(Config{Profile: "nuxeo", ManagedNuxeo: true}), " ")
+	got = strings.Join(ComposeArgs(Config{Sources: srcOf("nuxeo"), ManagedNuxeo: true}), " ")
 	if !strings.Contains(got, "-f "+filepath.Join("upstream", "compose.nuxeo-deployment.yaml")+" -f compose.override.yaml") {
 		t.Errorf("managed nuxeo: %s", got)
 	}
-	for _, c := range []Config{{Profile: "nuxeo"}, {Profile: "alfresco", ManagedNuxeo: true}} {
+	for _, c := range []Config{{Sources: srcOf("nuxeo")}, {Sources: srcOf("alfresco"), ManagedNuxeo: true}} {
 		if got := strings.Join(ComposeArgs(c), " "); strings.Contains(got, "nuxeo-deployment") {
 			t.Errorf("%+v: %s", c, got)
 		}
@@ -182,12 +182,12 @@ func TestConfigLoad(t *testing.T) {
 	if _, err := Load(dir); output.CodeOf(err) != output.ExitUsage {
 		t.Errorf("missing file: %v", err)
 	}
-	c := Config{SchemaVersion: SchemaVersion, Upstream: "abc", Profile: "alfresco", Extras: []string{"alfresco-2"}, BindIP: "127.0.0.1", Context: "app"}
+	c := Config{SchemaVersion: SchemaVersion, Upstream: "abc", Sources: srcOf("alfresco", "alfresco-2"), BindIP: "127.0.0.1", Context: "app"}
 	if err := Save(dir, c); err != nil {
 		t.Fatal(err)
 	}
 	got, err := Load(dir)
-	if err != nil || got.Profile != "alfresco" || len(got.Extras) != 1 || got.Context != "app" {
+	if err != nil || got.Sources != (stack.Sources{Alfresco: 2}) || got.Context != "app" {
 		t.Errorf("round trip = %+v, %v", got, err)
 	}
 	for _, bad := range []string{"schemaVersion: 3\n", "schemaVersion: 2\nunknown: x\n"} {
@@ -220,7 +220,7 @@ func TestNextSteps(t *testing.T) {
 		{"alfresco", "my-app", "openarch app models pull --dir my-app,openarch app up --dir my-app"},
 		{"full", "openarch-app", "openarch app models pull,openarch app up   (the first start builds Nuxeo from source, which takes long)"},
 	} {
-		if got := strings.Join(nextSteps(Config{Profile: c.profile, ManagedNuxeo: stack.NeedsNuxeo(c.profile)}, c.dir), ","); got != c.want {
+		if got := strings.Join(nextSteps(Config{Sources: srcOf(c.profile), ManagedNuxeo: stack.NeedsNuxeo(c.profile)}, c.dir), ","); got != c.want {
 			t.Errorf("%s %s: %q, want %q", c.profile, c.dir, got, c.want)
 		}
 	}
@@ -287,7 +287,7 @@ func (f *fakeSystem) env() Env {
 }
 
 func initOpts(dir string) InitOptions {
-	return InitOptions{Dir: dir, Settings: Config{Profile: "alfresco", LLMModel: "m", EmbeddingModel: "e", BindIP: "127.0.0.1", Context: "app"}}
+	return InitOptions{Dir: dir, Settings: Config{Sources: srcOf("alfresco"), LLMModel: "m", EmbeddingModel: "e", BindIP: "127.0.0.1", Context: "app"}}
 }
 
 func TestInit(t *testing.T) {
@@ -319,7 +319,7 @@ func TestInit(t *testing.T) {
 		t.Errorf("upstream checkout missing: %v", err)
 	}
 	c, err := Load(dir)
-	if err != nil || c.Upstream != stack.UpstreamRef || c.Profile != "alfresco" {
+	if err != nil || c.Upstream != stack.UpstreamRef || c.Profile() != "alfresco" {
 		t.Errorf("config = %+v, %v", c, err)
 	}
 	set := f.calls[len(f.calls)-1]
@@ -340,7 +340,7 @@ func TestInitNuxeo(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "setup")
 	f := &fakeSystem{}
 	o := initOpts(dir)
-	o.Settings.Profile = "full"
+	o.Settings.Sources = srcOf("full")
 	res, err := Init(context.Background(), f.env(), o)
 	if err != nil {
 		t.Fatal(err)
@@ -453,9 +453,9 @@ func TestInitDefaultUsers(t *testing.T) {
 
 func TestInitValidation(t *testing.T) {
 	for _, o := range []InitOptions{
-		{Settings: Config{Profile: "demo"}},
-		{Settings: Config{Profile: "nuxeo", Extras: []string{"alfresco-2"}}},
-		{Settings: Config{Profile: "alfresco", Extras: []string{"debug"}}},
+		{Settings: Config{}},
+		{Settings: Config{Sources: stack.Sources{Alfresco: 3}}},
+		{Settings: Config{Sources: stack.Sources{Alfresco: 1, Nuxeo: 2}}},
 	} {
 		o.Dir = t.TempDir()
 		if _, err := Init(context.Background(), (&fakeSystem{}).env(), o); output.CodeOf(err) != output.ExitUsage {

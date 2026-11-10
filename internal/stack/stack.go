@@ -89,6 +89,91 @@ var GitContexts = []GitContext{
 	{"CONTENT_LAKE_APP_UI_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app-ui.git", "a6ddcbe1b68db6d7030e21a77844a8e848a7aed4"},
 }
 
+// The most instances of each source type that one setup can have. Upstream
+// has one second Alfresco (the alfresco-2 extra) and one Nuxeo.
+const (
+	MaxAlfresco = 2
+	MaxNuxeo    = 1
+)
+
+// Sources are the content sources of a setup: how many Alfresco and Nuxeo
+// instances it runs. Users choose them; the upstream profile and extras follow
+// from them.
+type Sources struct {
+	Alfresco int `yaml:"alfresco" json:"alfresco"`
+	Nuxeo    int `yaml:"nuxeo" json:"nuxeo"`
+}
+
+// Valid returns a usage error when the setup has no source, or more instances
+// than upstream supports.
+func (s Sources) Valid() error {
+	switch {
+	case s.Alfresco < 0 || s.Nuxeo < 0:
+		return output.Usage("--alfresco and --nuxeo cannot be negative", "")
+	case s.Alfresco == 0 && s.Nuxeo == 0:
+		return output.Usage("the setup has no source", "Use --alfresco, --nuxeo or both, for example --alfresco 1 --nuxeo 1.")
+	case s.Alfresco > MaxAlfresco:
+		return output.Usage(fmt.Sprintf("--alfresco %d: at most %d Alfresco instances", s.Alfresco, MaxAlfresco), "")
+	case s.Nuxeo > MaxNuxeo:
+		return output.Usage(fmt.Sprintf("--nuxeo %d: at most %d Nuxeo instance", s.Nuxeo, MaxNuxeo), "")
+	}
+	return nil
+}
+
+// Profile returns the upstream base profile that runs the sources.
+func (s Sources) Profile() string {
+	switch {
+	case s.Nuxeo == 0:
+		return "alfresco"
+	case s.Alfresco == 0:
+		return "nuxeo"
+	}
+	return "full"
+}
+
+// Extras returns the upstream extras that the sources need on top of the
+// profile: alfresco-2 for a second Alfresco.
+func (s Sources) Extras() []string {
+	if s.Alfresco >= 2 {
+		return []string{"alfresco-2"}
+	}
+	return nil
+}
+
+// String names the sources, for example "2 Alfresco, 1 Nuxeo".
+func (s Sources) String() string {
+	var parts []string
+	if s.Alfresco > 0 {
+		parts = append(parts, fmt.Sprintf("%d Alfresco", s.Alfresco))
+	}
+	if s.Nuxeo > 0 {
+		parts = append(parts, fmt.Sprintf("%d Nuxeo", s.Nuxeo))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// SourcesOf returns the sources of an upstream profile and extras, the form of
+// the deprecated --profile and --extra flags and of openarch-app.yaml version 1.
+func SourcesOf(profile string, extras []string) (Sources, error) {
+	if err := ValidProfile(profile); err != nil {
+		return Sources{}, err
+	}
+	if err := ValidExtras(profile, extras); err != nil {
+		return Sources{}, err
+	}
+	s := Sources{Alfresco: 1}
+	switch profile {
+	case "nuxeo":
+		s = Sources{Nuxeo: 1}
+	case "full":
+		s = Sources{Alfresco: 1, Nuxeo: 1}
+	}
+	if slices.Contains(extras, "alfresco-2") {
+		s.Alfresco++
+	}
+	return s, nil
+}
+
 // Profiles are the upstream base profiles that the plugin supports. A setup
 // uses exactly one.
 var Profiles = []string{"alfresco", "nuxeo", "full"}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -119,7 +118,7 @@ func checks(_ Env, opts Options) []check {
 		{"docker.cli", "Docker CLI", checkDockerCLI},
 		{"docker.daemon", "Docker daemon", checkDockerDaemon},
 		{"docker.compose", "Docker Compose v2 or later", checkCompose},
-		{"docker.memory", "Docker memory for the profile", checkMemory},
+		{"docker.memory", "Docker memory for the sources", checkMemory},
 		{"git.cli", "Git", checkGit},
 		{"model.runner", "Docker Model Runner", checkModelRunner},
 		{"model.url", "Docker Model Runner API", checkModelURL},
@@ -129,7 +128,7 @@ func checks(_ Env, opts Options) []check {
 	for _, p := range opts.Ports {
 		cs = append(cs, check{fmt.Sprintf("port.%d", p), fmt.Sprintf("Port %d is free", p), portCheck(p)})
 	}
-	if stack.NeedsNuxeo(opts.Profile) {
+	if opts.Sources.Nuxeo > 0 {
 		cs = append(cs, check{"nuxeo.deployment", "nuxeo-deployment folder", checkNuxeoDeployment})
 	}
 	return append(cs, check{"openarch.cli", "CLI for OpenArch " + minOpenArch + " or later", checkOpenArch})
@@ -183,18 +182,18 @@ func checkMemory(ctx context.Context, s *state) Result {
 	if !ok {
 		return skipped("Docker daemon is not reachable")
 	}
-	need := profileMemory[s.opts.Profile]
-	if slices.Contains(s.opts.Extras, "alfresco-2") {
+	need := profileMemory[s.opts.Sources.Profile()]
+	if s.opts.Sources.Alfresco >= 2 {
 		need.min += alfresco2Memory.min
 		need.recommended += alfresco2Memory.recommended
 	}
 	mem := fmt.Sprintf("%.1f GiB available to Docker", float64(info.MemTotal)/gib)
-	fix := fmt.Sprintf("Give Docker at least %d GiB of memory (Docker Desktop: Settings > Resources), or use a smaller profile.", need.recommended/gib)
+	fix := fmt.Sprintf("Give Docker at least %d GiB of memory (Docker Desktop: Settings > Resources), or use fewer sources.", need.recommended/gib)
 	switch {
 	case info.MemTotal < need.min:
-		return Result{Status: Fail, Message: mem + fmt.Sprintf(", profile %s needs at least %d GiB", s.opts.Profile, need.min/gib), Fix: fix}
+		return Result{Status: Fail, Message: mem + fmt.Sprintf(", %s need at least %d GiB", s.opts.Sources, need.min/gib), Fix: fix}
 	case info.MemTotal < need.recommended:
-		return Result{Status: Warn, Message: mem + fmt.Sprintf(", %d GiB recommended for profile %s", need.recommended/gib, s.opts.Profile), Fix: fix}
+		return Result{Status: Warn, Message: mem + fmt.Sprintf(", %d GiB recommended for %s", need.recommended/gib, s.opts.Sources), Fix: fix}
 	}
 	return Result{Status: OK, Message: mem}
 }

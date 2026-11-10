@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
+	"github.com/AlfrescoLabs/openarch-app/internal/stack"
 )
 
 // Status is the result of one check.
@@ -50,11 +51,9 @@ func (r Report) Failed() bool { return r.Summary.Fail > 0 }
 
 // Options select what to check.
 type Options struct {
-	// Profile is the upstream base profile. It sets the memory threshold and
-	// whether nuxeo-deployment is needed.
-	Profile string
-	// Extras are the opt-in additions, such as alfresco-2.
-	Extras         []string
+	// Sources are the Alfresco and Nuxeo instances. They set the memory
+	// threshold and whether the nuxeo-deployment check runs.
+	Sources        stack.Sources
 	LLMModel       string
 	EmbeddingModel string
 	// ModelURL is Docker Model Runner as seen from the host.

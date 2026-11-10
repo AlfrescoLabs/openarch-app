@@ -10,30 +10,31 @@ stdout '\[fail\] +openarch.cli +openarch 0.5.1 is too old'
 stdout 'fix: Install or update the CLI for OpenArch'
 env FAKE_OPENARCH_VERSION=
 
-# nuxeo.deployment runs only for the profiles with Nuxeo
+# nuxeo.deployment runs only for a setup with Nuxeo
 ! exec openarch-app doctor --check nuxeo.deployment
 stderr 'unknown check "nuxeo.deployment"'
 stderr 'Valid checks: docker.cli, '
 # A missing folder is fine: init fetches it.
-exec openarch-app doctor --profile full --dir setup --check nuxeo.deployment -o json
+exec openarch-app doctor --alfresco 1 --nuxeo 1 --dir setup --check nuxeo.deployment -o json
 stdout '"id": "nuxeo.deployment"'
 stdout '"status": "ok"'
 stdout 'fetches it at commit 0a5569054e6bb2763770d8ecd1d5c26f019fdc5d'
 mkdir setup/nuxeo-deployment
-exec openarch-app doctor --profile nuxeo --dir setup --check nuxeo.deployment -o json
+exec openarch-app doctor --alfresco 0 --nuxeo 1 --dir setup --check nuxeo.deployment -o json
 stdout '"status": "ok"'
 
 # Usage errors
+! exec openarch-app doctor --alfresco 0 --nuxeo 0
+stderr 'the setup has no source'
 ! exec openarch-app doctor --profile nope
+stderr 'Warning: --profile and --extra are deprecated and will be removed: use --alfresco and --nuxeo'
 stderr 'unknown profile "nope"'
-stderr 'Valid profiles: alfresco, nuxeo, full.'
-! exec openarch-app doctor --extra debug
-stderr 'unknown extra "debug"'
-stderr 'Valid extras: alfresco-2.'
 
-# alfresco-2 adds its port
-! exec openarch-app doctor --extra alfresco-2 --check nope
+# A second Alfresco adds its port, Nuxeo adds 8081
+! exec openarch-app doctor --alfresco 2 --check nope
 stderr 'port.8082'
+! exec openarch-app doctor --alfresco 0 --nuxeo 1 --check nope
+stderr 'port.8081'
 ! exec openarch-app doctor --check nope -o json
 stdout '"code": "usage"'
 stdout 'unknown check'

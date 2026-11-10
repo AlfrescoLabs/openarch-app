@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
+	"github.com/AlfrescoLabs/openarch-app/internal/stack"
 )
 
 // fake is a healthy system. Tests change one field to break one thing.
@@ -51,7 +52,7 @@ func info(mem int64) string {
 
 func opts() Options {
 	return Options{
-		Profile:        "alfresco",
+		Sources:        stack.Sources{Alfresco: 1},
 		LLMModel:       "ai/qwen2.5",
 		EmbeddingModel: "ai/mxbai-embed-large",
 		ModelURL:       "http://localhost:12434",
@@ -236,8 +237,10 @@ func TestMemoryByProfile(t *testing.T) {
 		f := newFake()
 		f.infoJSON = info(c.mem)
 		o := opts()
-		o.Profile = c.profile
-		o.Extras = c.extras
+		var err error
+		if o.Sources, err = stack.SourcesOf(c.profile, c.extras); err != nil {
+			t.Fatal(err)
+		}
 		got := find(t, run(t, f, o), "docker.memory")
 		if got.Status != c.want {
 			t.Errorf("%s with %d GiB = %+v, want %s", c.profile, c.mem/gib, got, c.want)
@@ -318,7 +321,7 @@ func TestNuxeoDeployment(t *testing.T) {
 		t.Error("nuxeo.deployment must not run for the alfresco profile")
 	}
 	o := opts()
-	o.Profile = "full"
+	o.Sources = stack.Sources{Alfresco: 1, Nuxeo: 1}
 	// A missing folder is fine: init fetches it.
 	c := find(t, run(t, f, o), "nuxeo.deployment")
 	if c.Status != OK || !strings.Contains(c.Message, "'openarch app init' fetches it at commit 0a5569054e6b") {

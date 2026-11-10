@@ -32,7 +32,8 @@ stdout '--yes'
 -- current/openarch-app.yaml --
 schemaVersion: 2
 upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
-profile: alfresco
+alfresco: 1
+nuxeo: 0
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1
@@ -46,7 +47,8 @@ CONTENT_LAKE_APP_UI_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app-ui.
 -- newer/openarch-app.yaml --
 schemaVersion: 2
 upstream: 2222222222222222222222222222222222222222
-profile: alfresco
+alfresco: 1
+nuxeo: 0
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1
@@ -62,7 +64,8 @@ context: app
 -- oldurls/openarch-app.yaml --
 schemaVersion: 2
 upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
-profile: alfresco
+alfresco: 1
+nuxeo: 0
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1

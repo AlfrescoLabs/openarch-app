@@ -14,11 +14,11 @@ cd setup
 ! exec openarch-app logs --follow -o json
 stdout '--follow does not work with --output json'
 
-# The profiles with Nuxeo need nuxeo-deployment before compose runs. init fetched
+# A setup with Nuxeo needs nuxeo-deployment before compose runs. init fetched
 # it, so a missing one gets the commands to fetch it again.
 cd ../nuxeo
 ! exec openarch-app up
-stderr 'profile full needs .*nuxeo-deployment, which init fetched and is now missing'
+stderr 'Nuxeo needs .*nuxeo-deployment, which init fetched and is now missing'
 stderr 'git -C .*nuxeo-deployment checkout --detach 0a5569054e6bb2763770d8ecd1d5c26f019fdc5d'
 
 # A setup of 0.2.0 or earlier needs upgrade first.
@@ -32,7 +32,8 @@ schemaVersion: 9
 -- setup/openarch-app.yaml --
 schemaVersion: 2
 upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
-profile: alfresco
+alfresco: 1
+nuxeo: 0
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1
@@ -41,7 +42,8 @@ context: app
 schemaVersion: 2
 managedNuxeo: true
 upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
-profile: full
+alfresco: 1
+nuxeo: 1
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1

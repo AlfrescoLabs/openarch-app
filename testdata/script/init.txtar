@@ -1,10 +1,22 @@
 # Usage errors stop init before it writes anything.
-! exec openarch-app init --profile demo
-stderr 'unknown profile "demo"'
+! exec openarch-app init --alfresco 3
+stderr 'at most 2 Alfresco instances'
 ! exists openarch-app
 
+! exec openarch-app init --alfresco 0
+stderr 'the setup has no source'
+stderr 'Use --alfresco, --nuxeo or both'
+
+! exec openarch-app init --nuxeo 2
+stderr 'at most 1 Nuxeo instance'
+
+# The deprecated --profile and --extra still work, with a notice, and cannot be
+# mixed with the new flags.
 ! exec openarch-app init --profile nuxeo --extra alfresco-2
+stderr 'Warning: --profile and --extra are deprecated and will be removed: use --alfresco and --nuxeo'
 stderr 'the alfresco-2 extra needs the alfresco or full profile'
+! exec openarch-app init --profile full --nuxeo 1
+stderr '--profile and --extra cannot be combined with --alfresco and --nuxeo'
 
 ! exec openarch-app init --bind-ip localhost
 stderr 'invalid --bind-ip localhost'
