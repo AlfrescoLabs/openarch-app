@@ -24,7 +24,7 @@ stderr 'openarch app doctor --profile full'
 schemaVersion: 9
 -- setup/openarch-app.yaml --
 schemaVersion: 1
-upstream: 160f618096c326445cbe4f9c65858f65852dad74
+upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: alfresco
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
@@ -32,7 +32,7 @@ bindIP: 127.0.0.1
 context: app
 -- nuxeo/openarch-app.yaml --
 schemaVersion: 1
-upstream: 160f618096c326445cbe4f9c65858f65852dad74
+upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: full
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large

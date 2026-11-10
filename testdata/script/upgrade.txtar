@@ -1,7 +1,7 @@
 # A setup at the commit of this build has nothing to upgrade.
 cd current
 exec openarch-app upgrade
-stdout 'already uses upstream commit 160f618096c326445cbe4f9c65858f65852dad74'
+stdout 'already uses upstream commit 25b1e7c2b680b8468291750d92e363f746904a9d'
 exec openarch-app upgrade -o json
 stdout '"changed": false'
 
@@ -12,6 +12,12 @@ stderr 'uses upstream commit 2222222222222222222222222222222222222222, which thi
 stderr 'update openarch-app'
 ! exec openarch-app up
 stderr 'which this build does not know'
+
+# A setup from 0.1.x is refused by up, with the upgrade steps, before docker runs.
+cd ../old
+! exec openarch-app up
+stderr 'uses upstream commit 160f618096c326445cbe4f9c65858f65852dad74, this build uses 25b1e7c2b680b8468291750d92e363f746904a9d'
+stderr 'openarch app down., back up the volumes, then run .openarch app upgrade.'
 
 # A current commit with old build-context URLs would build old code: up refuses it.
 cd ../oldurls
@@ -25,7 +31,7 @@ stdout '--yes'
 
 -- current/openarch-app.yaml --
 schemaVersion: 1
-upstream: 160f618096c326445cbe4f9c65858f65852dad74
+upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: alfresco
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
@@ -45,9 +51,17 @@ llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1
 context: app
--- oldurls/openarch-app.yaml --
+-- old/openarch-app.yaml --
 schemaVersion: 1
 upstream: 160f618096c326445cbe4f9c65858f65852dad74
+profile: alfresco
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+-- oldurls/openarch-app.yaml --
+schemaVersion: 1
+upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: alfresco
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
