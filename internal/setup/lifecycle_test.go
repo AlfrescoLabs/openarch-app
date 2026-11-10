@@ -23,6 +23,10 @@ type fakeDocker struct {
 	scriptOut  string
 	hasModels  bool
 	missingBin string
+	// repoIDs maps a discovery URL to the repository id it answers; a URL that
+	// is not in it answers 401.
+	repoIDs map[string]string
+	gets    []string
 }
 
 func (f *fakeDocker) env() Env {
@@ -48,6 +52,14 @@ func (f *fakeDocker) env() Env {
 				return []byte("rag-service | started\n"), nil
 			}
 			return nil, errors.New("unexpected " + call)
+		},
+		HTTPGet: func(_ context.Context, url, user, password string) (int, []byte, error) {
+			f.gets = append(f.gets, url+" "+user+":"+password)
+			id, ok := f.repoIDs[url]
+			if !ok {
+				return 401, nil, nil
+			}
+			return 200, []byte(`{"entry":{"repository":{"id":"` + id + `","edition":"Community"}}}`), nil
 		},
 		Stream: func(_ context.Context, _ string, extraEnv []string, stdout, _ io.Writer, name string, args ...string) error {
 			f.calls = append(f.calls, name+" "+strings.Join(args, " "))

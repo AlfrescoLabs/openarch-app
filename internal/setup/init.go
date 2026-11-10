@@ -27,11 +27,13 @@ type Env struct {
 	// copies its output to stdout and stderr while it runs.
 	Stream   func(ctx context.Context, dir string, extraEnv []string, stdout, stderr io.Writer, name string, args ...string) error
 	LookPath func(file string) (string, error)
+	// HTTPGet does a GET with basic auth and returns the status and the body.
+	HTTPGet func(ctx context.Context, url, user, password string) (int, []byte, error)
 }
 
 // SystemEnv returns an Env backed by the real system.
 func SystemEnv() Env {
-	return Env{Run: runCommand, Stream: streamCommand, LookPath: exec.LookPath}
+	return Env{Run: runCommand, Stream: streamCommand, LookPath: exec.LookPath, HTTPGet: httpGet}
 }
 
 func streamCommand(ctx context.Context, dir string, extraEnv []string, stdout, stderr io.Writer, name string, args ...string) error {

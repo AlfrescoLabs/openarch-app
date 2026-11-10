@@ -106,6 +106,9 @@ type UpResult struct {
 	Extras    []string   `json:"extras,omitempty"`
 	Built     bool       `json:"built"`
 	Endpoints []Endpoint `json:"endpoints"`
+	// SourceIDs are the repository ids of the two Alfresco instances of the
+	// alfresco-2 extra, as rag-service uses them.
+	SourceIDs map[string]string `json:"sourceIds,omitempty"`
 }
 
 // WriteText writes the human-readable form.
@@ -205,6 +208,15 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 		if err := Save(s.Dir, s.Config); err != nil {
 			return res, err
 		}
+	}
+	// The repository ids exist only once Alfresco has started, so they need the
+	// wait. Without it the next 'up' sets them.
+	if opts.Wait {
+		ids, err := SyncSourceIDs(ctx, env, s, st, opts.WaitTimeout)
+		if err != nil {
+			return res, err
+		}
+		res.SourceIDs = ids
 	}
 	res.Endpoints = s.Endpoints()
 	return res, nil
@@ -448,7 +460,13 @@ var smokeScripts = map[string]string{
 // stack. The suite writes its output to out. The suites take the Alfresco and
 // Nuxeo logins as environment variables.
 func SmokeTest(ctx context.Context, env Env, s Setup, out io.Writer, st Streams) (SmokeResult, error) {
-	res := SmokeResult{Script: smokeScripts[s.Config.Profile]}
+	scripts := []string{smokeScripts[s.Config.Profile]}
+	if slices.Contains(s.Config.Extras, "alfresco-2") {
+		// It checks what the profile suite cannot: two sources, their ids and
+		// the permissions of each.
+		scripts = append(scripts, "test/test-two-alfresco.sh")
+	}
+	res := SmokeResult{Script: strings.Join(scripts, " + ")}
 	if err := s.CheckPins(); err != nil {
 		return res, err
 	}
@@ -480,14 +498,17 @@ func SmokeTest(ctx context.Context, env Env, s Setup, out io.Writer, st Streams)
 		"ALF2_AUTH=" + login("ALFRESCO_2_INTERNAL_USERNAME", "ALFRESCO_2_INTERNAL_PASSWORD", "admin", "admin"),
 		"NUXEO_AUTH=" + login("NUXEO_USERNAME", "NUXEO_PASSWORD", "Administrator", "Administrator"),
 	}
-	var buf bytes.Buffer
-	// The suites run from the setup folder, so a log they leave behind never
-	// lands in upstream/.
-	runErr := env.Stream(ctx, s.Dir, extra, io.MultiWriter(out, &buf), st.Err, "bash", UpstreamDir+"/"+res.Script)
-	text := buf.String()
-	res.Passed = strings.Count(text, "[PASS]")
-	res.Failed = strings.Count(text, "[FAIL]")
-	res.Skipped = strings.Count(text, "[SKIP]")
-	res.OK = runErr == nil && res.Failed == 0
+	res.OK = true
+	for _, script := range scripts {
+		var buf bytes.Buffer
+		// The suites run from the setup folder, so a log they leave behind never
+		// lands in upstream/.
+		runErr := env.Stream(ctx, s.Dir, extra, io.MultiWriter(out, &buf), st.Err, "bash", UpstreamDir+"/"+script)
+		text := buf.String()
+		res.Passed += strings.Count(text, "[PASS]")
+		res.Failed += strings.Count(text, "[FAIL]")
+		res.Skipped += strings.Count(text, "[SKIP]")
+		res.OK = res.OK && runErr == nil && strings.Count(text, "[FAIL]") == 0
+	}
 	return res, nil
 }

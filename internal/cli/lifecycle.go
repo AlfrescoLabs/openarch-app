@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -50,6 +51,10 @@ prints the endpoints.
 After an update of openarch-app that pins another upstream commit, up refuses
 the setup until 'openarch app upgrade' has moved it.
 
+With the alfresco-2 extra, up then reads the repository id of each Alfresco
+and gives both to rag-service (ALFRESCO_1_SOURCE_ID and ALFRESCO_2_SOURCE_ID in
+.env.local), so the RAG service can apply the permissions of each instance.
+
 The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 		Example: `  openarch app up
   openarch app up --dir ./my-app --wait-timeout 1800`,
@@ -66,6 +71,9 @@ The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 				return err
 			}
 			opts.Wait = !noWait
+			if noWait && slices.Contains(s.Config.Extras, "alfresco-2") {
+				app.Printer.Warn("With --no-wait the RAG source ids of the two Alfresco instances are not checked. The next 'openarch app up' sets them.")
+			}
 			env := app.setupEnv()
 			if s.UsesUpstreamAlfrescoAdmin() {
 				app.Printer.Warn("Alfresco still uses the upstream admin password 'admin'. New setups get a random one. " +

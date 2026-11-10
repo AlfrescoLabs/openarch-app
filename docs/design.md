@@ -173,6 +173,8 @@ Flags of `init`:
 | `full` | profile | `alfresco` and `nuxeo` together. Needs nuxeo-deployment. |
 | `alfresco-2` | extra (an upstream override file) | A second Alfresco with its own ingesters, on host ports 8082 and 8445. Only with `alfresco` or `full`. Upstream limits the JVM memory of both instances to 13.5 GB in total. |
 
+With `alfresco-2`, `rag-service` lists both instances as sources, and it needs the repository id of each (`ALFRESCO_1_SOURCE_ID`, `ALFRESCO_2_SOURCE_ID`). The id is the repository UUID that Alfresco makes at its first boot and that the ingesters already write on every document, so the plugin reads it and never chooses it. After `up --wait`, `up` reads `repository.id` from `/alfresco/api/discovery` of each instance (through the proxy on port 80 and on port 8082), writes the ids to `.env.local` when they changed, and recreates only `rag-service`. It does this on every `up`, so the ids also follow a repository that `down -v` replaced. `smoke-test` then also runs `test/test-two-alfresco.sh`.
+
 ## Limits
 
 - Images and models are pulled by tag, as upstream does. Base images and build-time packages inside the remote builds are not pinned. The Nuxeo source is a GitHub archive with no checksum.
