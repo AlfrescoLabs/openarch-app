@@ -12,9 +12,20 @@ import (
 )
 
 const (
-	discovery1 = "http://127.0.0.1:80/alfresco/api/discovery"
-	discovery2 = "http://127.0.0.1:8082/alfresco/api/discovery"
+	discovery1 = "alfresco"
+	discovery2 = "alfresco-2"
 )
+
+// upCalls returns the 'docker compose up' calls, without the discovery calls.
+func upCalls(calls []string) []string {
+	var ups []string
+	for _, c := range calls {
+		if strings.Contains(c, " up -d") {
+			ups = append(ups, c)
+		}
+	}
+	return ups
+}
 
 func twoAlfrescoSetup(t *testing.T) Setup {
 	t.Helper()
@@ -29,34 +40,36 @@ func twoAlfrescoSetup(t *testing.T) Setup {
 func TestSyncSourceIDs(t *testing.T) {
 	s := twoAlfrescoSetup(t)
 	f := &fakeDocker{repoIDs: map[string]string{discovery1: "uuid-1", discovery2: "uuid-2"}}
-	ids, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60)
+	ids, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ids["ALFRESCO_1_SOURCE_ID"] != "uuid-1" || ids["ALFRESCO_2_SOURCE_ID"] != "uuid-2" {
 		t.Errorf("ids = %v", ids)
 	}
-	// Each instance is asked with its own admin login.
-	if strings.Join(f.gets, ",") != discovery1+" admin:Pw-One-1,"+discovery2+" admin:Pw-Two-2" {
+	// Each instance is asked inside its own container, with its own admin login
+	// on stdin.
+	if strings.Join(f.gets, ",") != `alfresco user = "admin:Pw-One-1",alfresco-2 user = "admin:Pw-Two-2"` {
 		t.Errorf("gets = %v", f.gets)
 	}
 	local := ParseEnv(mustRead(t, filepath.Join(s.Dir, EnvFile)))
 	if local["ALFRESCO_1_SOURCE_ID"] != "uuid-1" || local["ALFRESCO_2_SOURCE_ID"] != "uuid-2" || local["ALFRESCO_ADMIN_PASSWORD"] != "Pw-One-1" {
 		t.Errorf(".env.local = %v", local)
 	}
-	if len(f.calls) != 1 || !strings.HasSuffix(f.calls[0], "up -d --no-deps --wait --wait-timeout 60 rag-service") {
+	if ups := upCalls(f.calls); len(ups) != 1 || !strings.HasSuffix(ups[0], "up -d --no-deps --wait --wait-timeout 60 rag-service") {
 		t.Errorf("calls = %v", f.calls)
 	}
 
 	// The same ids again: nothing to write, no restart.
 	f.calls = nil
-	if _, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60); err != nil || len(f.calls) != 0 {
+	if _, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60, true); err != nil || len(upCalls(f.calls)) != 0 {
 		t.Errorf("second run: calls %v, %v", f.calls, err)
 	}
 
 	// After 'down -v' the second repository has a new id.
 	f.repoIDs[discovery2] = "uuid-2b"
-	if ids, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60); err != nil || ids["ALFRESCO_2_SOURCE_ID"] != "uuid-2b" || len(f.calls) != 1 {
+	f.calls = nil
+	if ids, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60, true); err != nil || ids["ALFRESCO_2_SOURCE_ID"] != "uuid-2b" || len(upCalls(f.calls)) != 1 {
 		t.Errorf("new repository: %v, calls %v, %v", ids, f.calls, err)
 	}
 	if got := ParseEnv(mustRead(t, filepath.Join(s.Dir, EnvFile)))["ALFRESCO_2_SOURCE_ID"]; got != "uuid-2b" {
@@ -67,8 +80,8 @@ func TestSyncSourceIDs(t *testing.T) {
 func TestSyncSourceIDsFails(t *testing.T) {
 	s := twoAlfrescoSetup(t)
 	f := &fakeDocker{repoIDs: map[string]string{discovery1: "uuid-1"}}
-	_, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60)
-	if output.CodeOf(err) != output.ExitRemote || !strings.Contains(err.Error(), "HTTP 401") {
+	_, err := SyncSourceIDs(context.Background(), f.env(), s, Streams{Err: io.Discard}, 60, true)
+	if output.CodeOf(err) != output.ExitRemote || !strings.Contains(err.Error(), "alfresco-2") {
 		t.Fatalf("err = %v", err)
 	}
 	if _, ok := ParseEnv(mustRead(t, filepath.Join(s.Dir, EnvFile)))["ALFRESCO_1_SOURCE_ID"]; ok {
@@ -78,7 +91,7 @@ func TestSyncSourceIDsFails(t *testing.T) {
 
 func TestSyncSourceIDsOneAlfresco(t *testing.T) {
 	f := &fakeDocker{}
-	ids, err := SyncSourceIDs(context.Background(), f.env(), newSetup(t, Config{}), Streams{Err: io.Discard}, 60)
+	ids, err := SyncSourceIDs(context.Background(), f.env(), newSetup(t, Config{}), Streams{Err: io.Discard}, 60, true)
 	if ids != nil || err != nil || len(f.gets) != 0 {
 		t.Errorf("ids %v, gets %v, %v", ids, f.gets, err)
 	}
@@ -91,10 +104,26 @@ func TestUpSetsSourceIDs(t *testing.T) {
 	if err != nil || res.SourceIDs["ALFRESCO_2_SOURCE_ID"] != "uuid-2" {
 		t.Fatalf("res = %+v, %v", res, err)
 	}
-	// Without the wait the repositories may not be up yet: the next up sets them.
-	f = &fakeDocker{}
-	if res, err := Up(context.Background(), f.env(), twoAlfrescoSetup(t), UpOptions{}, Streams{Err: io.Discard}); err != nil || res.SourceIDs != nil || len(f.gets) != 0 {
-		t.Errorf("no wait: %+v, gets %v, %v", res, f.gets, err)
+	// rag-service cannot start without the ids, so the two repositories start
+	// alone first. The ids are then in place, and rag-service needs no restart.
+	if ups := upCalls(f.calls); len(ups) != 2 || !strings.HasSuffix(ups[0], "up -d --build --wait --wait-timeout 60 alfresco alfresco-2") ||
+		!strings.HasSuffix(ups[1], "up -d --build --wait --wait-timeout 60") {
+		t.Errorf("calls = %v", f.calls)
+	}
+
+	// --no-wait still waits for the two repositories when an id is missing.
+	f = &fakeDocker{repoIDs: map[string]string{discovery1: "uuid-1", discovery2: "uuid-2"}}
+	s = twoAlfrescoSetup(t)
+	if _, err := Up(context.Background(), f.env(), s, UpOptions{WaitTimeout: 60}, Streams{Err: io.Discard}); err != nil || len(f.gets) != 2 {
+		t.Fatalf("no wait, no ids: gets %v, %v", f.gets, err)
+	}
+	if ups := upCalls(f.calls); len(ups) != 2 || !strings.HasSuffix(ups[1], "up -d --build") {
+		t.Errorf("calls = %v", f.calls)
+	}
+	// With the ids set, --no-wait does not ask the repositories at all.
+	f.calls, f.gets = nil, nil
+	if res, err := Up(context.Background(), f.env(), s, UpOptions{WaitTimeout: 60}, Streams{Err: io.Discard}); err != nil || res.SourceIDs != nil || len(f.gets) != 0 || len(upCalls(f.calls)) != 1 {
+		t.Errorf("no wait, ids set: %+v, gets %v, calls %v, %v", res, f.gets, f.calls, err)
 	}
 }
 

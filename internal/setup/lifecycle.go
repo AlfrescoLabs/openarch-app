@@ -201,6 +201,20 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 	if res.Built {
 		args = append(args, "--build")
 	}
+	if s.missingSourceIDs() {
+		// rag-service refuses to start with two Alfresco sources and an empty
+		// id, and an id exists only once its repository has booted. So the two
+		// repositories start alone first, always with a wait, and their ids are
+		// recorded before the rest of the stack starts.
+		first := append(slices.Clone(args), "--wait", "--wait-timeout", strconv.Itoa(opts.WaitTimeout), "alfresco", "alfresco-2")
+		if err := env.Stream(ctx, s.Dir, nil, st.Err, st.Err, "docker", s.compose(first...)...); err != nil {
+			return res, output.NewError(output.ExitUnhealthy, "the Alfresco instances did not start: "+err.Error(),
+				"Run 'openarch app status' and 'openarch app logs alfresco alfresco-2' to see which one failed.")
+		}
+		if _, err := SyncSourceIDs(ctx, env, s, st, opts.WaitTimeout, false); err != nil {
+			return res, err
+		}
+	}
 	if opts.Wait {
 		args = append(args, "--wait", "--wait-timeout", strconv.Itoa(opts.WaitTimeout))
 	}
@@ -220,7 +234,7 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 	// The repository ids exist only once Alfresco has started, so they need the
 	// wait. Without it the next 'up' sets them.
 	if opts.Wait {
-		ids, err := SyncSourceIDs(ctx, env, s, st, opts.WaitTimeout)
+		ids, err := SyncSourceIDs(ctx, env, s, st, opts.WaitTimeout, true)
 		if err != nil {
 			return res, err
 		}

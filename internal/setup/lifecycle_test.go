@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,10 +24,11 @@ type fakeDocker struct {
 	scriptOut  string
 	hasModels  bool
 	missingBin string
-	// repoIDs maps a discovery URL to the repository id it answers; a URL that
-	// is not in it answers 401.
+	// repoIDs maps an Alfresco service to the repository id that its discovery
+	// answers; a service that is not in it fails like curl -f on a 401.
 	repoIDs map[string]string
-	gets    []string
+	// gets records each discovery as "service login" from the curl config on stdin.
+	gets []string
 }
 
 func (f *fakeDocker) env() Env {
@@ -37,7 +39,7 @@ func (f *fakeDocker) env() Env {
 			}
 			return "/usr/bin/" + file, nil
 		},
-		Run: func(_ context.Context, _ string, _ io.Reader, name string, args ...string) ([]byte, error) {
+		Run: func(_ context.Context, _ string, stdin io.Reader, name string, args ...string) ([]byte, error) {
 			call := name + " " + strings.Join(args, " ")
 			f.calls = append(f.calls, call)
 			switch {
@@ -48,18 +50,19 @@ func (f *fakeDocker) env() Env {
 				return nil, nil
 			case strings.Contains(call, " ps -a --format json"):
 				return []byte(f.psOut), nil
+			case strings.Contains(call, " exec -T "):
+				service := args[slices.Index(args, "-T")+1]
+				login, _ := io.ReadAll(stdin)
+				f.gets = append(f.gets, service+" "+strings.TrimSpace(string(login)))
+				id, ok := f.repoIDs[service]
+				if !ok {
+					return nil, errors.New("exit status 22")
+				}
+				return []byte(`{"entry":{"repository":{"id":"` + id + `","edition":"Community"}}}`), nil
 			case strings.Contains(call, " logs"):
 				return []byte("rag-service | started\n"), nil
 			}
 			return nil, errors.New("unexpected " + call)
-		},
-		HTTPGet: func(_ context.Context, url, user, password string) (int, []byte, error) {
-			f.gets = append(f.gets, url+" "+user+":"+password)
-			id, ok := f.repoIDs[url]
-			if !ok {
-				return 401, nil, nil
-			}
-			return 200, []byte(`{"entry":{"repository":{"id":"` + id + `","edition":"Community"}}}`), nil
 		},
 		Stream: func(_ context.Context, _ string, extraEnv []string, stdout, _ io.Writer, name string, args ...string) error {
 			f.calls = append(f.calls, name+" "+strings.Join(args, " "))

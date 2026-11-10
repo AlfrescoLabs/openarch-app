@@ -51,9 +51,11 @@ prints the endpoints.
 After an update of openarch-app that pins another upstream commit, up refuses
 the setup until 'openarch app upgrade' has moved it.
 
-With the alfresco-2 extra, up then reads the repository id of each Alfresco
-and gives both to rag-service (ALFRESCO_1_SOURCE_ID and ALFRESCO_2_SOURCE_ID in
-.env.local), so the RAG service can apply the permissions of each instance.
+With the alfresco-2 extra, rag-service needs the repository id of each Alfresco
+(ALFRESCO_1_SOURCE_ID and ALFRESCO_2_SOURCE_ID in .env.local). The first up
+starts the two Alfresco instances alone, waits for them even with --no-wait,
+records their ids, and then starts the rest. Every later up checks the ids
+again after the wait, so they follow a repository that 'down -v' replaced.
 
 The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 		Example: `  openarch app up
@@ -72,7 +74,7 @@ The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 			}
 			opts.Wait = !noWait
 			if noWait && slices.Contains(s.Config.Extras, "alfresco-2") {
-				app.Printer.Warn("With --no-wait the RAG source ids of the two Alfresco instances are not checked. The next 'openarch app up' sets them.")
+				app.Printer.Warn("With --no-wait, up does not check that the RAG source ids still match the two Alfresco repositories. After a 'down -v', run 'openarch app up' without it.")
 			}
 			env := app.setupEnv()
 			if s.UsesUpstreamAlfrescoAdmin() {
