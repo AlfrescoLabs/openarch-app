@@ -130,9 +130,17 @@ func writeTable(w io.Writer, text string) error {
 	return tw.Flush()
 }
 
-// NeedsBuild reports whether the images must be built: the pinned build
-// contexts differ from the ones of the last build.
+// builtUpstreamKey records in BuiltContexts the upstream commit of the last
+// build. Some images build from files in upstream/ itself (the Dockerfile,
+// acs/alfresco), so a new upstream commit needs a build too.
+const builtUpstreamKey = "upstream"
+
+// NeedsBuild reports whether the images must be built: the upstream commit or
+// the pinned build contexts differ from the ones of the last build.
 func (s Setup) NeedsBuild() bool {
+	if s.Config.BuiltContexts[builtUpstreamKey] != s.Config.Upstream {
+		return true
+	}
 	for _, g := range stack.GitContexts {
 		if s.Config.BuiltContexts[g.Var] != g.Ref {
 			return true
@@ -201,7 +209,7 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 			"Run 'openarch app status' and 'openarch app logs <service>' to see which service failed.")
 	}
 	if res.Built {
-		s.Config.BuiltContexts = map[string]string{}
+		s.Config.BuiltContexts = map[string]string{builtUpstreamKey: s.Config.Upstream}
 		for _, g := range stack.GitContexts {
 			s.Config.BuiltContexts[g.Var] = g.Ref
 		}

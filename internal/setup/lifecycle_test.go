@@ -130,6 +130,19 @@ func TestUpBuildsOnceAndRecords(t *testing.T) {
 	if s.NeedsBuild() {
 		t.Errorf("the build was not recorded: %v", s.Config.BuiltContexts)
 	}
+	// A build recorded before the upstream commit was part of it (0.1.x), or
+	// for another upstream commit, needs a new build.
+	for _, up := range []string{"", "1111111111111111111111111111111111111111"} {
+		old := s
+		old.Config.BuiltContexts = map[string]string{}
+		for k, v := range s.Config.BuiltContexts {
+			old.Config.BuiltContexts[k] = v
+		}
+		old.Config.BuiltContexts[builtUpstreamKey] = up
+		if !old.NeedsBuild() {
+			t.Errorf("built upstream %q: no build", up)
+		}
+	}
 	f.calls = nil
 	res, err = Up(context.Background(), f.env(), s, UpOptions{}, Streams{Err: &errOut})
 	if err != nil || res.Built || !strings.HasSuffix(f.calls[0], "up -d") {

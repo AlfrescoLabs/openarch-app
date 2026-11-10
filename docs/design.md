@@ -106,7 +106,7 @@ Upstream builds some images from remote Git contexts. `.env.local` sets each var
 | `CONTENT_LAKE_APP_UI_CONTEXT` | [AlfrescoLabs/content-lake-app-ui](https://github.com/AlfrescoLabs/content-lake-app-ui) |
 
 - The SHAs are pinned in the plugin code next to the upstream commit and change with it. BuildKit fetches each commit by its SHA.
-- The built images have fixed tags (`content-lake-app/<service>:local`). So `up` passes `--build` when the pinned SHAs differ from the ones in `openarch-app.yaml`, and then records the new ones.
+- The built images have fixed tags (`content-lake-app/<service>:local`). Some of them also build from files in `upstream/` itself (`dockerfiles/Dockerfile`, `acs/alfresco`). So `up` passes `--build` when the upstream commit or the pinned SHAs differ from the ones of the last build in `openarch-app.yaml`, and then records the new ones.
 
 ## Upgrades
 
@@ -123,7 +123,7 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
   6. It records the new commit in `openarch-app.yaml`.
 
   Each step can run again, so an upgrade that stops halfway is completed by running `upgrade` again.
-- `upgrade` does not build. The next `up` sees that the built SHAs differ, builds the images from the new URLs, and records them.
+- `upgrade` does not build. The next `up` sees that the upstream commit of the last build differs, builds the images from the new checkout and URLs, and records them.
 - For the Nuxeo profiles, `upgrade` warns when `nuxeo-deployment` is not at the commit of this release, and prints the Git commands.
 - A release that adds a field to `openarch-app.yaml` bumps `schemaVersion`, and its `upgrade` migrates the file. `Load` refuses unknown fields and other versions, so an older binary refuses a newer file.
 - There is no downgrade. The built images have fixed `:local` tags, so the old images are gone after the next `up`.

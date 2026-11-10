@@ -42,8 +42,8 @@ type Config struct {
 	Context        string   `yaml:"context" json:"context"`
 	DefaultSecrets bool     `yaml:"defaultSecrets,omitempty" json:"defaultSecrets,omitempty"`
 	DefaultUsers   bool     `yaml:"defaultUsers,omitempty" json:"defaultUsers,omitempty"`
-	// BuiltContexts maps each build context variable to the commit of the last
-	// build, so that 'up' knows when to rebuild.
+	// BuiltContexts maps each build context variable, and "upstream", to the
+	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`
 }
 
