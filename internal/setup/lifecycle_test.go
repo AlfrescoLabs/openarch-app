@@ -260,7 +260,7 @@ func TestSmokeTest(t *testing.T) {
 		t.Errorf("call %q, out %q", f.calls[0], out.String())
 	}
 	env := strings.Join(f.extraEnv, " ")
-	for _, want := range []string{"COMPOSE_PROJECT_NAME=openarch-app", "HOST=127.0.0.1", "USE_HTTPS=false", "ALF_AUTH=admin:admin", "NUXEO_AUTH=Administrator:Administrator"} {
+	for _, want := range []string{"COMPOSE_PROJECT_NAME=openarch-app", "HOST=127.0.0.1", "USE_HTTPS=false", "ALF_AUTH=admin:admin", "ALF2_AUTH=admin:admin", "NUXEO_AUTH=Administrator:Administrator"} {
 		if !strings.Contains(env, want) {
 			t.Errorf("missing %s in %s", want, env)
 		}
@@ -274,6 +274,26 @@ func TestSmokeTest(t *testing.T) {
 	f = &fakeDocker{missingBin: "jq"}
 	if _, err := SmokeTest(context.Background(), f.env(), newSetup(t, Config{}), io.Discard, Streams{Err: io.Discard}); output.CodeOf(err) != output.ExitPrerequisite {
 		t.Errorf("no jq: %v", err)
+	}
+}
+
+func TestUsesUpstreamAlfrescoAdmin(t *testing.T) {
+	// newSetup gives .env.local no Alfresco password, so the upstream admin applies.
+	if !newSetup(t, Config{}).UsesUpstreamAlfrescoAdmin() {
+		t.Error("a setup made before 0.2.0 is not reported")
+	}
+	for _, c := range []Config{{DefaultSecrets: true}, {Profile: "nuxeo"}} {
+		if newSetup(t, c).UsesUpstreamAlfrescoAdmin() {
+			t.Errorf("%+v is reported", c)
+		}
+	}
+	s := newSetup(t, Config{})
+	local := string(mustRead(t, filepath.Join(s.Dir, EnvFile))) + "ALFRESCO_ADMIN_PASSWORD=Random-Pw-1\n"
+	if err := os.WriteFile(filepath.Join(s.Dir, EnvFile), []byte(local), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if s.UsesUpstreamAlfrescoAdmin() {
+		t.Error("a random password is reported")
 	}
 }
 

@@ -39,6 +39,16 @@ func TestNewPassword(t *testing.T) {
 	}
 }
 
+func TestAlfrescoHash(t *testing.T) {
+	// The upstream default: the hash of admin in compose.alfresco.yaml.
+	if got := AlfrescoHash("admin"); got != "209c6174da490caeb422f3fa5a7ae634" {
+		t.Errorf("AlfrescoHash(admin) = %s", got)
+	}
+	if got := AlfrescoHash("Hash-Test-Pw1"); got != "f7fc0df7dfa832e0f112baf446673a09" {
+		t.Errorf("AlfrescoHash(Hash-Test-Pw1) = %s", got)
+	}
+}
+
 func TestParseEnv(t *testing.T) {
 	env := ParseEnv([]byte("# comment\n\nA=1\nB = two \nC=\"quoted\"\nD='single'\nE=a=b\nnoequals\n"))
 	want := map[string]string{"A": "1", "B": "two", "C": "quoted", "D": "single", "E": "a=b"}
@@ -71,10 +81,16 @@ func TestEnvValues(t *testing.T) {
 			t.Errorf("%s = %q", g.Var, v[g.Var])
 		}
 	}
-	for _, k := range []string{"ALFRESCO_ADMIN_PASSWORD", "NUXEO_PASSWORD", "ALFRESCO_2_INTERNAL_PASSWORD"} {
-		if _, ok := v[k]; ok {
-			t.Errorf("%s must keep its upstream value", k)
+	for _, a := range alfrescoAdmins {
+		if len(v[a.Password]) != passwordLength || v[a.Hash] != AlfrescoHash(v[a.Password]) {
+			t.Errorf("%s = %q, %s = %q", a.Password, v[a.Password], a.Hash, v[a.Hash])
 		}
+	}
+	if v["ALFRESCO_ADMIN_PASSWORD"] == v["ALFRESCO_2_INTERNAL_PASSWORD"] {
+		t.Error("both Alfresco instances got the same password")
+	}
+	if _, ok := v["NUXEO_PASSWORD"]; ok {
+		t.Error("NUXEO_PASSWORD must keep its upstream value")
 	}
 
 	c.DefaultSecrets, c.DefaultUsers = true, true
@@ -82,7 +98,7 @@ func TestEnvValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range append(RandomSecrets, adminUserKey, adminPasswordKey) {
+	for _, k := range append(RandomSecrets, adminUserKey, adminPasswordKey, "ALFRESCO_ADMIN_PASSWORD", "ALFRESCO_ADMIN_PASSWORD_HASH") {
 		if _, ok := v[k]; ok {
 			t.Errorf("%s set with --default-secrets --default-users", k)
 		}

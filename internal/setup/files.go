@@ -4,24 +4,39 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/md4" //nolint:staticcheck // Alfresco reads only this hash at bootstrap.
 
 	"github.com/AlfrescoLabs/openarch-app/internal/stack"
 )
 
 // RandomSecrets are the upstream secrets that init replaces. For each one the
-// stack sets both the server side and the client side. The other upstream
-// secrets keep their values, because their server side is set elsewhere:
-// ALFRESCO_ADMIN_PASSWORD and ALFRESCO_2_INTERNAL_PASSWORD (Alfresco keeps its
-// admin password in its database) and NUXEO_PASSWORD (set in nuxeo-deployment).
+// stack sets both the server side and the client side. The Alfresco admin
+// passwords are random too (see alfrescoAdmins). NUXEO_PASSWORD keeps its
+// upstream value, because Nuxeo creates its admin at the first boot and
+// nuxeo-deployment has no setting for it.
 var RandomSecrets = []string{"POSTGRES_PASSWORD", "SHARED_SECRET", "ACTIVEMQ_PASSWORD", "OPENSEARCH_ADMIN_PASSWORD"}
+
+// alfrescoAdmins maps the password that the clients of each Alfresco use to
+// the upstream variable of its bootstrap hash. Alfresco reads the hash only
+// at the first boot of an empty database.
+var alfrescoAdmins = []struct{ Password, Hash string }{
+	{"ALFRESCO_ADMIN_PASSWORD", "ALFRESCO_ADMIN_PASSWORD_HASH"},
+	{"ALFRESCO_2_INTERNAL_PASSWORD", "ALFRESCO_2_ADMIN_PASSWORD_HASH"},
+}
+
+// UpstreamAlfrescoPassword is the Alfresco admin password of upstream and of
+// setups made with --default-secrets or before 0.2.0.
+const UpstreamAlfrescoPassword = "admin"
 
 // Keys of the OpenArch login that the ingesters and the RAG service use.
 const (
@@ -117,6 +132,14 @@ func envValues(c Config) (map[string]string, error) {
 			}
 			v[k] = p
 		}
+		for _, a := range alfrescoAdmins {
+			p, err := NewPassword()
+			if err != nil {
+				return nil, err
+			}
+			v[a.Password] = p
+			v[a.Hash] = AlfrescoHash(p)
+		}
 	}
 	if !c.DefaultUsers {
 		p, err := NewPassword()
@@ -206,6 +229,16 @@ const (
 // it too, so a setup made by an older build gets the current file.
 func WriteOverride(dir string, c Config) error {
 	return writeFile(filepath.Join(dir, OverrideFile), renderOverride(c), 0o644)
+}
+
+// AlfrescoHash returns the form of password that Alfresco reads from
+// alfresco_user_store.adminpassword: MD4 over the UTF-16LE bytes, in hex.
+func AlfrescoHash(password string) string {
+	h := md4.New() //nolint:staticcheck // Alfresco reads only this hash at bootstrap.
+	for _, u := range utf16.Encode([]rune(password)) {
+		h.Write([]byte{byte(u), byte(u >> 8)})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func newUUID() (string, error) {

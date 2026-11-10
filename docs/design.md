@@ -81,7 +81,9 @@ docker compose -p openarch-app --project-directory upstream \
 ## Credentials
 
 - `init` generates random values for the secrets where the stack sets both the server side and the client side: `POSTGRES_PASSWORD`, `SHARED_SECRET`, `ACTIVEMQ_PASSWORD`, `OPENSEARCH_ADMIN_PASSWORD` and `HXPR_PASSWORD`. One generator makes passwords that meet the OpenSearch strength rule and use only URL-safe characters.
-- Every other secret keeps its upstream value, because its server side is set somewhere else: `ALFRESCO_ADMIN_PASSWORD` (Alfresco keeps its admin password in its database), `ALFRESCO_2_INTERNAL_PASSWORD`, and `NUXEO_PASSWORD` (set in nuxeo-deployment).
+- `init` also generates a random admin password for each Alfresco: `ALFRESCO_ADMIN_PASSWORD` and `ALFRESCO_2_INTERNAL_PASSWORD`, the passwords that the ingesters and `rag-service` use. Alfresco itself reads the admin password once, at the first boot of an empty database, from `ALFRESCO_ADMIN_PASSWORD_HASH` and `ALFRESCO_2_ADMIN_PASSWORD_HASH`. `init` writes those as the MD4 hash over the UTF-16LE password, the only form that upstream accepts there.
+- A setup made before 0.2.0 keeps Alfresco's `admin`, because Alfresco keeps the password of its first start. `up` warns about it.
+- `NUXEO_PASSWORD` keeps its upstream value: Nuxeo creates `Administrator` at its first boot, and nuxeo-deployment has no setting for it.
 - The secrets are in `.env.local` only. `init` writes them once and never overwrites an existing `.env.local`, because the databases keep the passwords of their first start.
 - The OpenArch admin password is in `openarch-users.yml` as a bcrypt hash. `compose.override.yaml` mounts the file into `hxpr-app` (`OPENARCH_USERS_FILE`) and publishes the OpenArch port on `${BIND_IP}:8090`. Port 8090 avoids 8080 (a CLI workspace) and 8081 (Nuxeo).
 - The ingesters and the RAG service log in to OpenArch as the admin, with `HXPR_USERNAME` and `HXPR_PASSWORD`, so the plaintext password is also in `.env.local`.
@@ -175,7 +177,7 @@ Flags of `init`:
 
 - Images and models are pulled by tag, as upstream does. Base images and build-time packages inside the remote builds are not pinned. The Nuxeo source is a GitHub archive with no checksum.
 - nuxeo-deployment is outside Rules 2 and 3 in the first version: the plugin does not fetch it, and its port 8081 does not follow `BIND_IP`.
-- `ALFRESCO_ADMIN_PASSWORD`, `ALFRESCO_2_INTERNAL_PASSWORD` and `NUXEO_PASSWORD` keep their upstream values.
+- `NUXEO_PASSWORD` keeps its upstream value, and setups made before 0.2.0 keep the upstream Alfresco admin password.
 - The secrets are tied to the volumes. Losing `.env.local` means losing access to the data.
 - Building the default chat model and running the test suites need `bash`, `curl`, and `jq` or `python3`. On Windows that means Git Bash or WSL.
 - The plugin depends on the layout of upstream at the pinned commit. A new commit needs a test run before it becomes the default.

@@ -67,6 +67,10 @@ The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 			}
 			opts.Wait = !noWait
 			env := app.setupEnv()
+			if s.UsesUpstreamAlfrescoAdmin() {
+				app.Printer.Warn("Alfresco still uses the upstream admin password 'admin'. New setups get a random one. " +
+					"Alfresco keeps the password of its first start: change it in Alfresco first, then ALFRESCO_ADMIN_PASSWORD in " + setup.EnvFile + ".")
+			}
 			if missing := s.MissingModels(cmd.Context(), env); len(missing) > 0 {
 				app.Printer.Warn("Docker Model Runner does not have " + strings.Join(missing, ", ") + ". Run 'openarch app models pull'.")
 			}

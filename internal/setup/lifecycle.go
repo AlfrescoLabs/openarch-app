@@ -150,6 +150,17 @@ func (s Setup) CheckNuxeo() error {
 		fmt.Sprintf("Run 'openarch app doctor --profile %s --dir %s' for the steps.", s.Config.Profile, s.Dir))
 }
 
+// UsesUpstreamAlfrescoAdmin reports whether an Alfresco of the setup still
+// has the upstream admin password, without the user having asked for it with
+// --default-secrets. Setups made before 0.2.0 have it.
+func (s Setup) UsesUpstreamAlfrescoAdmin() bool {
+	if s.Config.Profile == "nuxeo" || s.Config.DefaultSecrets {
+		return false
+	}
+	values, err := s.env()
+	return err == nil && values["ALFRESCO_ADMIN_PASSWORD"] == UpstreamAlfrescoPassword
+}
+
 // MissingModels returns the configured models that Docker Model Runner does
 // not have.
 func (s Setup) MissingModels(ctx context.Context, env Env) []string {
@@ -466,6 +477,7 @@ func SmokeTest(ctx context.Context, env Env, s Setup, out io.Writer, st Streams)
 		"HOST=" + contextHost(s.Config.BindIP),
 		"USE_HTTPS=false",
 		"ALF_AUTH=" + login("ALFRESCO_ADMIN_USER", "ALFRESCO_ADMIN_PASSWORD", "admin", "admin"),
+		"ALF2_AUTH=" + login("ALFRESCO_2_INTERNAL_USERNAME", "ALFRESCO_2_INTERNAL_PASSWORD", "admin", "admin"),
 		"NUXEO_AUTH=" + login("NUXEO_USERNAME", "NUXEO_PASSWORD", "Administrator", "Administrator"),
 	}
 	var buf bytes.Buffer
