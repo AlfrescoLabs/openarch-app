@@ -267,12 +267,12 @@ func portCheck(port int) func(context.Context, *state) Result {
 	}
 }
 
+// checkNuxeoDeployment reports the nuxeo-deployment folder. A missing folder is
+// fine: 'init' fetches it at its pinned commit.
 func checkNuxeoDeployment(_ context.Context, s *state) Result {
 	dir := filepath.Join(s.opts.Dir, stack.NuxeoDeploymentDir)
 	if info, err := s.env.Stat(dir); err != nil || !info.IsDir() {
-		return Result{Status: Fail, Message: fmt.Sprintf("%s is missing; profile %s needs it", dir, s.opts.Profile),
-			Fix: fmt.Sprintf("git clone %s %s && git -C %s checkout %s, then start it: docker compose --project-directory %s up -d",
-				stack.NuxeoDeploymentURL, dir, dir, stack.NuxeoDeploymentRef, dir)}
+		return Result{Status: OK, Message: fmt.Sprintf("%s does not exist yet; 'openarch app init' fetches it at commit %s", dir, stack.NuxeoDeploymentRef)}
 	}
 	return Result{Status: OK, Message: "found " + dir}
 }

@@ -53,9 +53,18 @@ openarch app smoke-test
 openarch app down
 ```
 
-`doctor` checks Docker, Docker Compose, Docker memory for the profile, Git, Docker Model Runner and its models, free ports, `nuxeo-deployment` for the profiles with Nuxeo, and the CLI for OpenArch 0.5.2 or later.
+`doctor` checks Docker, Docker Compose, Docker memory for the profile, Git, Docker Model Runner and its models, free ports, and the CLI for OpenArch 0.5.2 or later.
 
 `init` creates the setup folder `./openarch-app`: it fetches upstream at the pinned commit with Git, writes random secrets to `.env.local`, and adds an `openarch` context named `app` for the bundled Hyland OpenArch. `up` builds the images on the first start, waits until every service is healthy, and prints the endpoints. `down` keeps the data.
+
+The profile decides the sources: `alfresco` (the default), `nuxeo`, or `full` for both. `--extra alfresco-2` adds a second Alfresco:
+
+```sh
+openarch app init --profile full                  # one Alfresco and one Nuxeo
+openarch app init --extra alfresco-2              # two Alfresco instances
+```
+
+For `nuxeo` and `full`, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
 After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:
 

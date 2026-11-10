@@ -35,7 +35,7 @@ the question, and non-interactive mode needs --yes.`,
   openarch app up`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := app.openSetup(dir)
+			s, err := app.openSetupForUpgrade(dir)
 			if err != nil {
 				return err
 			}
@@ -46,8 +46,12 @@ the question, and non-interactive mode needs --yes.`,
 				if !app.Interactive() {
 					return output.Usage("upgrade needs a confirmation", "Back up the volumes, then run it again with --yes.")
 				}
-				_, _ = fmt.Fprintf(app.Streams.Err, "This moves the setup from upstream commit %s to %s.\n"+
-					"The next 'up' builds new images, and there is no way back. Back up the volumes first.\nContinue? [y/N] ", from, to)
+				if from == to {
+					_, _ = fmt.Fprintf(app.Streams.Err, "This updates the setup files to this release. The upstream commit stays %s.\nContinue? [y/N] ", to)
+				} else {
+					_, _ = fmt.Fprintf(app.Streams.Err, "This moves the setup from upstream commit %s to %s.\n"+
+						"The next 'up' builds new images, and there is no way back. Back up the volumes first.\nContinue? [y/N] ", from, to)
+				}
 				line, _ := bufio.NewReader(app.Streams.In).ReadString('\n')
 				switch strings.ToLower(strings.TrimSpace(line)) {
 				case "y", "yes":

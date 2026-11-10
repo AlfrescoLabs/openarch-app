@@ -14,11 +14,11 @@ env FAKE_OPENARCH_VERSION=
 ! exec openarch-app doctor --check nuxeo.deployment
 stderr 'unknown check "nuxeo.deployment"'
 stderr 'Valid checks: docker.cli, '
-! exec openarch-app doctor --profile full --dir setup --check nuxeo.deployment -o json
+# A missing folder is fine: init fetches it.
+exec openarch-app doctor --profile full --dir setup --check nuxeo.deployment -o json
 stdout '"id": "nuxeo.deployment"'
-stdout '"status": "fail"'
-stdout '"fix": "git clone https://github.com/aborroy/nuxeo-deployment.git .* checkout 0a5569054e6bb2763770d8ecd1d5c26f019fdc5d'
-stdout '"fail": 1'
+stdout '"status": "ok"'
+stdout 'fetches it at commit 0a5569054e6bb2763770d8ecd1d5c26f019fdc5d'
 mkdir setup/nuxeo-deployment
 exec openarch-app doctor --profile nuxeo --dir setup --check nuxeo.deployment -o json
 stdout '"status": "ok"'

@@ -32,11 +32,21 @@ type Setup struct {
 
 // Open loads the setup folder dir.
 func Open(dir string) (Setup, error) {
+	return open(dir, Load)
+}
+
+// OpenForUpgrade loads the setup folder dir, also when its openarch-app.yaml
+// has an older version.
+func OpenForUpgrade(dir string) (Setup, error) {
+	return open(dir, LoadForUpgrade)
+}
+
+func open(dir string, load func(string) (Config, error)) (Setup, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return Setup{}, err
 	}
-	c, err := Load(abs)
+	c, err := load(abs)
 	if err != nil {
 		return Setup{}, err
 	}
@@ -157,8 +167,13 @@ func (s Setup) CheckNuxeo() error {
 	if info, err := os.Stat(filepath.Join(s.Dir, stack.NuxeoDeploymentDir)); err == nil && info.IsDir() {
 		return nil
 	}
+	if s.Config.ManagedNuxeo {
+		dir := filepath.Join(s.Dir, stack.NuxeoDeploymentDir)
+		return output.NewError(output.ExitPrerequisite, fmt.Sprintf("profile %s needs %s, which init fetched and is now missing", s.Config.Profile, dir),
+			fmt.Sprintf("Fetch it again: git clone %s %s && git -C %s checkout --detach %s", stack.NuxeoDeploymentURL, dir, dir, stack.NuxeoDeploymentRef))
+	}
 	return output.NewError(output.ExitPrerequisite, fmt.Sprintf("profile %s needs %s in %s", s.Config.Profile, stack.NuxeoDeploymentDir, s.Dir),
-		fmt.Sprintf("Run 'openarch app doctor --profile %s --dir %s' for the steps.", s.Config.Profile, s.Dir))
+		"Clone nuxeo-deployment there and start it, as for setups made before 0.3.0.")
 }
 
 // UsesUpstreamAlfrescoAdmin reports whether an Alfresco of the setup still
@@ -470,12 +485,14 @@ func (r SmokeResult) WriteText(w io.Writer) error {
 	return err
 }
 
-// smokeScripts are the upstream suites for each profile. smoke-test.sh covers
-// Alfresco and Nuxeo together, so it needs the full profile.
+// smokeScripts are the upstream suites for each profile, the ones that the
+// upstream test/run-tests.sh runs. test-rag-full.sh covers Alfresco and Nuxeo
+// together. (test/smoke-test.sh is a different script, for a demo host: it
+// wants the demo UI at /, which the full profile does not serve.)
 var smokeScripts = map[string]string{
 	"alfresco": "test/test-alfresco.sh",
 	"nuxeo":    "test/test-nuxeo.sh",
-	"full":     "test/smoke-test.sh",
+	"full":     "test/test-rag-full.sh",
 }
 
 // SmokeTest runs the upstream test suite for the profile against the running

@@ -16,7 +16,7 @@ stderr 'which this build does not know'
 # A setup from 0.1.x is refused by up, with the upgrade steps, before docker runs.
 cd ../old
 ! exec openarch-app up
-stderr 'uses upstream commit 160f618096c326445cbe4f9c65858f65852dad74, this build uses 25b1e7c2b680b8468291750d92e363f746904a9d'
+stderr 'schemaVersion 1, this build reads 2'
 stderr 'openarch app down., back up the volumes, then run .openarch app upgrade.'
 
 # A current commit with old build-context URLs would build old code: up refuses it.
@@ -30,7 +30,7 @@ exec openarch-app upgrade --help
 stdout '--yes'
 
 -- current/openarch-app.yaml --
-schemaVersion: 1
+schemaVersion: 2
 upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: alfresco
 llmModel: ai/qwen2.5
@@ -44,7 +44,7 @@ CONTENT_LAKE_ACS_GIT_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app.gi
 CONTENT_LAKE_UI_GIT_CONTEXT=https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git#1df264e4fad2c22c92f151684d3a23bb4c90c819
 CONTENT_LAKE_APP_UI_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app-ui.git#a6ddcbe1b68db6d7030e21a77844a8e848a7aed4
 -- newer/openarch-app.yaml --
-schemaVersion: 1
+schemaVersion: 2
 upstream: 2222222222222222222222222222222222222222
 profile: alfresco
 llmModel: ai/qwen2.5
@@ -60,7 +60,7 @@ embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1
 context: app
 -- oldurls/openarch-app.yaml --
-schemaVersion: 1
+schemaVersion: 2
 upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: alfresco
 llmModel: ai/qwen2.5

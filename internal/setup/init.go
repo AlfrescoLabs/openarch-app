@@ -115,6 +115,7 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 	c := opts.Settings
 	c.SchemaVersion = SchemaVersion
 	c.Upstream = stack.UpstreamRef
+	c.ManagedNuxeo = stack.NeedsNuxeo(c.Profile)
 	if err := stack.ValidProfile(c.Profile); err != nil {
 		return InitResult{}, err
 	}
@@ -152,6 +153,15 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 	}
 	if reused {
 		res.Reused = append(res.Reused, UpstreamDir+"/")
+	}
+	if c.ManagedNuxeo {
+		reused, err := fetchCheckout(ctx, env, dir, nuxeoRepo)
+		if err != nil {
+			return res, err
+		}
+		if reused {
+			res.Reused = append(res.Reused, stack.NuxeoDeploymentDir+"/")
+		}
 	}
 
 	merged, reused, err := writeEnv(dir, &c)
@@ -199,55 +209,73 @@ func nextSteps(c Config, dir string) []string {
 	if d := filepath.Clean(dir); d != DefaultDir && d != "." {
 		flag = " --dir " + dir
 	}
-	var next []string
-	if stack.NeedsNuxeo(c.Profile) {
-		next = append(next, fmt.Sprintf("openarch app doctor --profile %s%s   (nuxeo-deployment must run first)", c.Profile, flag))
+	up := "openarch app up" + flag
+	if c.ManagedNuxeo {
+		up += "   (the first start builds Nuxeo from source, which takes long)"
 	}
-	return append(next, "openarch app models pull"+flag, "openarch app up"+flag)
+	return []string{"openarch app models pull" + flag, up}
 }
+
+// pinnedRepo is a Git repository that a setup holds at a pinned commit, in a
+// folder of its own.
+type pinnedRepo struct {
+	Dir, URL, Ref string
+}
+
+var (
+	upstreamRepo = pinnedRepo{UpstreamDir, stack.UpstreamURL, stack.UpstreamRef}
+	nuxeoRepo    = pinnedRepo{stack.NuxeoDeploymentDir, stack.NuxeoDeploymentURL, stack.NuxeoDeploymentRef}
+)
 
 // fetchUpstream fetches the pinned upstream commit into upstream/. It reports
 // true when upstream/ already holds that commit.
 func fetchUpstream(ctx context.Context, env Env, dir string) (bool, error) {
-	up := filepath.Join(dir, UpstreamDir)
-	if _, err := os.Stat(up); err == nil {
-		head, err := env.Run(ctx, up, nil, "git", "rev-parse", "HEAD")
-		if err == nil && strings.TrimSpace(string(head)) == stack.UpstreamRef {
+	return fetchCheckout(ctx, env, dir, upstreamRepo)
+}
+
+// fetchCheckout fetches the pinned commit of r into its folder. It reports true
+// when the folder already holds that commit, and refuses a folder at another
+// commit.
+func fetchCheckout(ctx context.Context, env Env, dir string, r pinnedRepo) (bool, error) {
+	path := filepath.Join(dir, r.Dir)
+	if _, err := os.Stat(path); err == nil {
+		head, err := env.Run(ctx, path, nil, "git", "rev-parse", "HEAD")
+		if err == nil && strings.TrimSpace(string(head)) == r.Ref {
 			return true, nil
 		}
-		return false, output.Usage(fmt.Sprintf("%s is not a checkout of commit %s", up, stack.UpstreamRef), "Delete "+up+" and run init again.")
+		return false, output.Usage(fmt.Sprintf("%s is not a checkout of commit %s", path, r.Ref), "Delete "+path+" and run init again.")
 	}
-	tmp, err := fetchPinned(ctx, env, dir, "init")
+	tmp, err := fetchPinned(ctx, env, dir, r, "init")
 	if err != nil {
 		return false, err
 	}
-	return false, os.Rename(tmp, up)
+	return false, os.Rename(tmp, path)
 }
 
-// fetchPinned fetches the pinned upstream commit into a temporary folder next
-// to upstream/ and returns its path, so a failed fetch leaves upstream/ as it
+// fetchPinned fetches the pinned commit of r into a temporary folder next to
+// its folder and returns its path, so a failed fetch leaves the folder as it
 // was. cmd names the command to run again after a network error.
-func fetchPinned(ctx context.Context, env Env, dir, cmd string) (string, error) {
-	tmp := filepath.Join(dir, UpstreamDir+".partial")
+func fetchPinned(ctx context.Context, env Env, dir string, r pinnedRepo, cmd string) (string, error) {
+	tmp := filepath.Join(dir, r.Dir+".partial")
 	if err := os.RemoveAll(tmp); err != nil {
 		return "", err
 	}
 	steps := [][]string{
 		{"-c", "init.defaultBranch=main", "init", "-q", tmp},
-		{"-C", tmp, "fetch", "-q", "--depth", "1", stack.UpstreamURL, stack.UpstreamRef},
+		{"-C", tmp, "fetch", "-q", "--depth", "1", r.URL, r.Ref},
 		{"-C", tmp, "checkout", "-q", "--detach", "FETCH_HEAD"},
 	}
 	for _, args := range steps {
 		if _, err := env.Run(ctx, dir, nil, "git", args...); err != nil {
-			return "", output.NewError(output.ExitRemote, "cannot fetch upstream: "+err.Error(), "Check your network, then run "+cmd+" again.")
+			return "", output.NewError(output.ExitRemote, fmt.Sprintf("cannot fetch %s: %v", r.Dir, err), "Check your network, then run "+cmd+" again.")
 		}
 	}
 	head, err := env.Run(ctx, dir, nil, "git", "-C", tmp, "rev-parse", "HEAD")
 	if err != nil {
 		return "", err
 	}
-	if got := strings.TrimSpace(string(head)); got != stack.UpstreamRef {
-		return "", fmt.Errorf("upstream checkout is at %s, expected %s", got, stack.UpstreamRef)
+	if got := strings.TrimSpace(string(head)); got != r.Ref {
+		return "", fmt.Errorf("%s checkout is at %s, expected %s", r.Dir, got, r.Ref)
 	}
 	return tmp, nil
 }

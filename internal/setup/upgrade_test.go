@@ -162,7 +162,8 @@ func TestUpgrade(t *testing.T) {
 			t.Errorf("%s still exists", gone)
 		}
 	}
-	// A second run finds nothing to do.
+	// A second run finds nothing to do. (The real checkout is now at the pin.)
+	f.heads[UpstreamDir] = stack.UpstreamRef
 	res, err = Upgrade(context.Background(), f.env(), s, UpgradeOptions{Confirm: func(string, string) error { return errors.New("asked again") }})
 	if err != nil || res.Changed {
 		t.Errorf("second run: %+v, %v", res, err)
@@ -278,5 +279,63 @@ func TestRecoverSwap(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Errorf("old folder not put back: %v", err)
+	}
+}
+
+func TestUpgradeMigratesVersion1(t *testing.T) {
+	// A setup of 0.2.0: the current upstream commit, version 1, and a
+	// nuxeo-deployment that the user started as a project of its own.
+	s := newSetup(t, Config{Profile: "full", Context: "app"})
+	s.Config.SchemaVersion = 1
+	if err := Save(s.Dir, s.Config); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(s.Dir); err == nil {
+		t.Fatal("Open read a version 1 file")
+	}
+	s, err := OpenForUpgrade(s.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFakeUpgrade()
+	f.heads[UpstreamDir] = stack.UpstreamRef
+	res, err := Upgrade(context.Background(), f.env(), s, UpgradeOptions{})
+	if err != nil || !res.Changed || res.Next[0] != "openarch app up" {
+		t.Fatalf("%+v, %v", res, err)
+	}
+	c, err := Load(s.Dir)
+	if err != nil || c.SchemaVersion != SchemaVersion || c.ManagedNuxeo {
+		t.Errorf("config = %+v, %v", c, err)
+	}
+	for _, call := range f.calls {
+		if strings.Contains(call, "fetch") {
+			t.Errorf("fetched although the commit did not change: %s", call)
+		}
+	}
+}
+
+func TestUpgradeManagedNuxeo(t *testing.T) {
+	// A managed nuxeo-deployment at an older commit moves with the upgrade.
+	s := newSetup(t, Config{Profile: "nuxeo", ManagedNuxeo: true, Context: "app"})
+	nd := filepath.Join(s.Dir, stack.NuxeoDeploymentDir)
+	if err := os.MkdirAll(nd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nd, "old-file"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := newFakeUpgrade()
+	f.heads[UpstreamDir] = stack.UpstreamRef
+	f.heads[stack.NuxeoDeploymentDir] = oldRef
+	f.heads[stack.NuxeoDeploymentDir+".partial"] = stack.NuxeoDeploymentRef
+	res, err := Upgrade(context.Background(), f.env(), s, UpgradeOptions{})
+	if err != nil || !res.Changed || len(res.Warnings) != 0 {
+		t.Fatalf("%+v, %v", res, err)
+	}
+	if _, err := os.Stat(filepath.Join(nd, "new-file")); err != nil {
+		t.Errorf("nuxeo-deployment was not replaced: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(nd, "old-file")); !os.IsNotExist(err) {
+		t.Error("the old nuxeo-deployment is still there")
 	}
 }

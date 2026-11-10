@@ -28,7 +28,8 @@ const (
 )
 
 // SchemaVersion is the version of openarch-app.yaml that this build writes.
-const SchemaVersion = 1
+// Version 2 added managedNuxeo. 'upgrade' migrates a file of an older version.
+const SchemaVersion = 2
 
 // Config is openarch-app.yaml: the settings of a setup. It holds no secrets.
 type Config struct {
@@ -42,13 +43,28 @@ type Config struct {
 	Context        string   `yaml:"context" json:"context"`
 	DefaultSecrets bool     `yaml:"defaultSecrets,omitempty" json:"defaultSecrets,omitempty"`
 	DefaultUsers   bool     `yaml:"defaultUsers,omitempty" json:"defaultUsers,omitempty"`
+	// ManagedNuxeo means that init fetched nuxeo-deployment, so the plugin runs
+	// it in the same Compose project. A setup made before 0.3.0 has a
+	// nuxeo-deployment that the user started as a project of its own.
+	ManagedNuxeo bool `yaml:"managedNuxeo,omitempty" json:"managedNuxeo,omitempty"`
 	// BuiltContexts maps each build context variable, and "upstream", to the
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`
 }
 
-// Load reads openarch-app.yaml from the setup folder dir.
+// Load reads openarch-app.yaml from the setup folder dir. A file of an older
+// version needs 'upgrade' first.
 func Load(dir string) (Config, error) {
+	c, err := LoadForUpgrade(dir)
+	if err == nil && c.SchemaVersion < SchemaVersion {
+		return c, output.Usage(fmt.Sprintf("%s has schemaVersion %d, this build reads %d", ConfigFile, c.SchemaVersion, SchemaVersion), upgradeHint)
+	}
+	return c, err
+}
+
+// LoadForUpgrade reads openarch-app.yaml like Load, and also accepts an older
+// version, which 'upgrade' migrates.
+func LoadForUpgrade(dir string) (Config, error) {
 	var c Config
 	data, err := os.ReadFile(filepath.Join(dir, ConfigFile))
 	if errors.Is(err, os.ErrNotExist) {
@@ -62,7 +78,7 @@ func Load(dir string) (Config, error) {
 	if err := dec.Decode(&c); err != nil {
 		return c, output.Usage(fmt.Sprintf("cannot read %s: %v", ConfigFile, err), "")
 	}
-	if c.SchemaVersion != SchemaVersion {
+	if c.SchemaVersion < 1 || c.SchemaVersion > SchemaVersion {
 		return c, output.Usage(fmt.Sprintf("%s has schemaVersion %d, this build reads %d", ConfigFile, c.SchemaVersion, SchemaVersion), "Update openarch-app.")
 	}
 	return c, nil

@@ -281,10 +281,10 @@ func TestSmokeTest(t *testing.T) {
 	f := &fakeDocker{scriptOut: "\x1b[0;32m[PASS]\x1b[0m a\n[PASS] b\n[SKIP] c\n"}
 	var out bytes.Buffer
 	res, err := SmokeTest(context.Background(), f.env(), s, &out, Streams{Err: io.Discard})
-	if err != nil || !res.OK || res.Passed != 2 || res.Skipped != 1 || res.Script != "test/smoke-test.sh" {
+	if err != nil || !res.OK || res.Passed != 2 || res.Skipped != 1 || res.Script != "test/test-rag-full.sh" {
 		t.Fatalf("res = %+v, %v", res, err)
 	}
-	if f.calls[0] != "bash upstream/test/smoke-test.sh" || !strings.Contains(out.String(), "[PASS] b") {
+	if f.calls[0] != "bash upstream/test/test-rag-full.sh" || !strings.Contains(out.String(), "[PASS] b") {
 		t.Errorf("call %q, out %q", f.calls[0], out.String())
 	}
 	env := strings.Join(f.extraEnv, " ")

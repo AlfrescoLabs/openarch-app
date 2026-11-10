@@ -28,7 +28,7 @@ func newDoctorCmd(app *App) *cobra.Command {
 		Short: "Check the prerequisites to run App for OpenArch",
 		Long: `Check the prerequisites to run App for OpenArch: Docker, Docker Compose,
 Docker memory for the profile, Git, Docker Model Runner and its models, free
-ports, nuxeo-deployment for the profiles with Nuxeo, and the CLI for OpenArch.
+ports, the nuxeo-deployment folder when it exists, and the CLI for OpenArch.
 
 Each check reports ok, warn, fail or skip, and a fix when something is wrong.
 Exit code 3 means at least one check failed. Warnings do not change the exit code.
@@ -37,7 +37,8 @@ Checks: docker.cli, docker.daemon, docker.compose, docker.memory, git.cli,
 model.runner, model.url, model.embedding, model.chat, port.<n> (one for each
 port), nuxeo.deployment (profiles nuxeo and full), openarch.cli.
 
-The default ports are ` + ports(stack.HostPorts(nil)) + ` (the proxy and Hyland OpenArch), plus
+The default ports are ` + ports(stack.HostPorts("alfresco", nil)) + ` (the proxy and Hyland OpenArch), plus
+` + ports([]int{stack.NuxeoPort}) + ` (Nuxeo) for the nuxeo and full profiles, and
 ` + ports([]int{stack.Alfresco2Port, stack.Alfresco2HTTPSPort}) + ` with --extra alfresco-2. The memory thresholds are estimates.`,
 		Example: `  openarch app doctor
   openarch app doctor --profile full --extra alfresco-2 --dir ./my-app
@@ -52,7 +53,7 @@ The default ports are ` + ports(stack.HostPorts(nil)) + ` (the proxy and Hyland 
 				return err
 			}
 			if len(opts.Ports) == 0 {
-				opts.Ports = stack.HostPorts(opts.Extras)
+				opts.Ports = stack.HostPorts(opts.Profile, opts.Extras)
 			}
 			opts.OpenArchBin = os.Getenv(envBin)
 			report, err := doctor.Run(cmd.Context(), app.doctorEnv(), opts)

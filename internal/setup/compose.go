@@ -16,6 +16,10 @@ func ComposeArgs(c Config) []string {
 	if slices.Contains(c.Extras, "alfresco-2") {
 		args = append(args, "-f", filepath.Join(UpstreamDir, "compose.alfresco-2.yaml"))
 	}
+	if c.ManagedNuxeo && stack.NeedsNuxeo(c.Profile) {
+		// Runs ../nuxeo-deployment (the folder of the setup) in this project.
+		args = append(args, "-f", filepath.Join(UpstreamDir, stack.NuxeoDeploymentFile))
+	}
 	args = append(args, "-f", OverrideFile, "--profile", c.Profile)
 	for _, e := range c.Extras {
 		args = append(args, "--profile", e)

@@ -38,6 +38,11 @@ const (
 	// NuxeoDeploymentRef is the nuxeo-deployment commit to use with the
 	// pinned upstream commit.
 	NuxeoDeploymentRef = "0a5569054e6bb2763770d8ecd1d5c26f019fdc5d"
+	// NuxeoDeploymentFile is the upstream override file that runs
+	// nuxeo-deployment inside the stack project.
+	NuxeoDeploymentFile = "compose.nuxeo-deployment.yaml"
+	// NuxeoPort publishes the Nuxeo of nuxeo-deployment (NUXEO_HTTP_PORT).
+	NuxeoPort = 8081
 )
 
 // The upstream repository and the commit that every setup uses.
@@ -99,9 +104,13 @@ func ValidProfile(p string) error {
 }
 
 // HostPorts returns the host ports that a setup with profile and extras
-// publishes. Every profile publishes the same base ports.
-func HostPorts(extras []string) []int {
+// publishes. Every profile publishes the same base ports, and the Nuxeo
+// profiles publish Nuxeo too.
+func HostPorts(profile string, extras []string) []int {
 	ports := []int{ProxyPort, ProxyHTTPSPort, OpenArchPort}
+	if NeedsNuxeo(profile) {
+		ports = append(ports, NuxeoPort)
+	}
 	if slices.Contains(extras, "alfresco-2") {
 		ports = append(ports, Alfresco2Port, Alfresco2HTTPSPort)
 	}
@@ -131,7 +140,7 @@ func ValidExtras(profile string, extras []string) error {
 }
 
 // NeedsNuxeo reports whether profile p runs the Nuxeo ingesters, which need
-// nuxeo-deployment running next to the stack.
+// the Nuxeo of nuxeo-deployment.
 func NeedsNuxeo(p string) bool {
 	return p == "nuxeo" || p == "full"
 }

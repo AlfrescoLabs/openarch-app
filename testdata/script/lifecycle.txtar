@@ -7,23 +7,30 @@ stdout '"code": "usage"'
 
 # A setup with an unknown schema version is refused.
 ! exec openarch-app down --dir future
-stderr 'schemaVersion 9, this build reads 1'
+stderr 'schemaVersion 9, this build reads 2'
 
 # logs cannot follow in JSON mode; the check runs before docker.
 cd setup
 ! exec openarch-app logs --follow -o json
 stdout '--follow does not work with --output json'
 
-# The profiles with Nuxeo need nuxeo-deployment before compose runs.
+# The profiles with Nuxeo need nuxeo-deployment before compose runs. init fetched
+# it, so a missing one gets the commands to fetch it again.
 cd ../nuxeo
 ! exec openarch-app up
-stderr 'profile full needs nuxeo-deployment'
-stderr 'openarch app doctor --profile full'
+stderr 'profile full needs .*nuxeo-deployment, which init fetched and is now missing'
+stderr 'git -C .*nuxeo-deployment checkout --detach 0a5569054e6bb2763770d8ecd1d5c26f019fdc5d'
+
+# A setup of 0.2.0 or earlier needs upgrade first.
+cd ../v1
+! exec openarch-app status
+stderr 'schemaVersion 1, this build reads 2'
+stderr 'openarch app upgrade'
 
 -- future/openarch-app.yaml --
 schemaVersion: 9
 -- setup/openarch-app.yaml --
-schemaVersion: 1
+schemaVersion: 2
 upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: alfresco
 llmModel: ai/qwen2.5
@@ -31,6 +38,15 @@ embeddingModel: ai/mxbai-embed-large
 bindIP: 127.0.0.1
 context: app
 -- nuxeo/openarch-app.yaml --
+schemaVersion: 2
+managedNuxeo: true
+upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
+profile: full
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+-- v1/openarch-app.yaml --
 schemaVersion: 1
 upstream: 25b1e7c2b680b8468291750d92e363f746904a9d
 profile: full

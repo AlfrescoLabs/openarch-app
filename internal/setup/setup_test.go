@@ -165,6 +165,16 @@ func TestComposeArgs(t *testing.T) {
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
+	// A managed nuxeo-deployment runs in the same project.
+	got = strings.Join(ComposeArgs(Config{Profile: "nuxeo", ManagedNuxeo: true}), " ")
+	if !strings.Contains(got, "-f "+filepath.Join("upstream", "compose.nuxeo-deployment.yaml")+" -f compose.override.yaml") {
+		t.Errorf("managed nuxeo: %s", got)
+	}
+	for _, c := range []Config{{Profile: "nuxeo"}, {Profile: "alfresco", ManagedNuxeo: true}} {
+		if got := strings.Join(ComposeArgs(c), " "); strings.Contains(got, "nuxeo-deployment") {
+			t.Errorf("%+v: %s", c, got)
+		}
+	}
 }
 
 func TestConfigLoad(t *testing.T) {
@@ -172,7 +182,7 @@ func TestConfigLoad(t *testing.T) {
 	if _, err := Load(dir); output.CodeOf(err) != output.ExitUsage {
 		t.Errorf("missing file: %v", err)
 	}
-	c := Config{SchemaVersion: 1, Upstream: "abc", Profile: "alfresco", Extras: []string{"alfresco-2"}, BindIP: "127.0.0.1", Context: "app"}
+	c := Config{SchemaVersion: SchemaVersion, Upstream: "abc", Profile: "alfresco", Extras: []string{"alfresco-2"}, BindIP: "127.0.0.1", Context: "app"}
 	if err := Save(dir, c); err != nil {
 		t.Fatal(err)
 	}
@@ -180,13 +190,24 @@ func TestConfigLoad(t *testing.T) {
 	if err != nil || got.Profile != "alfresco" || len(got.Extras) != 1 || got.Context != "app" {
 		t.Errorf("round trip = %+v, %v", got, err)
 	}
-	for _, bad := range []string{"schemaVersion: 2\n", "schemaVersion: 1\nunknown: x\n"} {
+	for _, bad := range []string{"schemaVersion: 3\n", "schemaVersion: 2\nunknown: x\n"} {
 		if err := os.WriteFile(filepath.Join(dir, ConfigFile), []byte(bad), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := Load(dir); output.CodeOf(err) != output.ExitUsage {
+		if _, err := LoadForUpgrade(dir); output.CodeOf(err) != output.ExitUsage {
 			t.Errorf("%q: %v", bad, err)
 		}
+	}
+	// A file of 0.2.0 or earlier needs 'upgrade', which reads it.
+	if err := os.WriteFile(filepath.Join(dir, ConfigFile), []byte("schemaVersion: 1\nprofile: full\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var e *output.Error
+	if _, err := Load(dir); !errors.As(err, &e) || !strings.Contains(e.Hint, "openarch app upgrade") {
+		t.Errorf("version 1: %v", err)
+	}
+	if c, err := LoadForUpgrade(dir); err != nil || c.SchemaVersion != 1 || c.ManagedNuxeo {
+		t.Errorf("LoadForUpgrade(version 1) = %+v, %v", c, err)
 	}
 }
 
@@ -197,9 +218,9 @@ func TestNextSteps(t *testing.T) {
 		{"alfresco", "openarch-app", "openarch app models pull,openarch app up"},
 		{"alfresco", "./openarch-app/", "openarch app models pull,openarch app up"},
 		{"alfresco", "my-app", "openarch app models pull --dir my-app,openarch app up --dir my-app"},
-		{"full", "openarch-app", "openarch app doctor --profile full   (nuxeo-deployment must run first),openarch app models pull,openarch app up"},
+		{"full", "openarch-app", "openarch app models pull,openarch app up   (the first start builds Nuxeo from source, which takes long)"},
 	} {
-		if got := strings.Join(nextSteps(Config{Profile: c.profile}, c.dir), ","); got != c.want {
+		if got := strings.Join(nextSteps(Config{Profile: c.profile, ManagedNuxeo: stack.NeedsNuxeo(c.profile)}, c.dir), ","); got != c.want {
 			t.Errorf("%s %s: %q, want %q", c.profile, c.dir, got, c.want)
 		}
 	}
@@ -255,6 +276,9 @@ func (f *fakeSystem) env() Env {
 				if head == "" {
 					head = stack.UpstreamRef
 				}
+				if i := slices.Index(args, "-C"); i >= 0 && strings.HasPrefix(filepath.Base(args[i+1]), stack.NuxeoDeploymentDir) {
+					head = stack.NuxeoDeploymentRef
+				}
 				return []byte(head + "\n"), nil
 			}
 			return nil, errors.New("unexpected call " + call)
@@ -309,6 +333,35 @@ func TestInit(t *testing.T) {
 	// A second init on the same folder is refused.
 	if _, err := Init(context.Background(), f.env(), initOpts(dir)); output.CodeOf(err) != output.ExitUsage {
 		t.Errorf("second init: %v", err)
+	}
+}
+
+func TestInitNuxeo(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "setup")
+	f := &fakeSystem{}
+	o := initOpts(dir)
+	o.Settings.Profile = "full"
+	res, err := Init(context.Background(), f.env(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Config.ManagedNuxeo || !strings.Contains(res.Next[1], "builds Nuxeo from source") {
+		t.Errorf("result = %+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(dir, stack.NuxeoDeploymentDir, ".env")); err != nil {
+		t.Errorf("nuxeo-deployment was not fetched: %v", err)
+	}
+	var fetches []string
+	for _, c := range f.calls {
+		if strings.Contains(c, " fetch ") {
+			fetches = append(fetches, c)
+		}
+	}
+	if len(fetches) != 2 || !strings.HasSuffix(fetches[1], stack.NuxeoDeploymentURL+" "+stack.NuxeoDeploymentRef) {
+		t.Errorf("fetches = %v", fetches)
+	}
+	if c, err := Load(dir); err != nil || !c.ManagedNuxeo {
+		t.Errorf("config = %+v, %v", c, err)
 	}
 }
 

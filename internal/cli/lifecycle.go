@@ -20,13 +20,25 @@ func addDirFlag(cmd *cobra.Command, dir *string) {
 }
 
 func (a *App) openSetup(dir string) (setup.Setup, error) {
+	return setup.Open(setupDir(dir))
+}
+
+// openSetupForUpgrade is openSetup for 'upgrade', which also reads an older
+// version of openarch-app.yaml.
+func (a *App) openSetupForUpgrade(dir string) (setup.Setup, error) {
+	return setup.OpenForUpgrade(setupDir(dir))
+}
+
+// setupDir returns the folder of --dir: the current folder when it is a setup,
+// else ./openarch-app.
+func setupDir(dir string) string {
 	if dir == "" {
 		dir = defaultSetupDir
 		if _, err := os.Stat(setup.ConfigFile); err == nil {
 			dir = "."
 		}
 	}
-	return setup.Open(dir)
+	return dir
 }
 
 func (a *App) streams() setup.Streams {
@@ -57,7 +69,10 @@ starts the two Alfresco instances alone, waits for them even with --no-wait,
 records their ids, and then starts the rest. Every later up checks the ids
 again after the wait, so they follow a repository that 'down -v' replaced.
 
-The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
+For the nuxeo and full profiles, Nuxeo runs in the same Compose project, from
+the nuxeo-deployment folder that init fetched. Its first start builds Nuxeo from
+source, which takes long. A setup made before 0.3.0 keeps its nuxeo-deployment
+as a project of its own: start that one first.`,
 		Example: `  openarch app up
   openarch app up --dir ./my-app --wait-timeout 1800`,
 		Args: noArgs,
@@ -103,8 +118,9 @@ func newDownCmd(app *App) *cobra.Command {
 		Use:   "down",
 		Short: "Stop the App for OpenArch stack and keep its data",
 		Long: `Stop and remove the containers of the setup folder with 'docker compose down'.
-The volumes stay, so 'openarch app up' starts again with the same data.
-nuxeo-deployment is a separate project: stop it in its own folder.`,
+The volumes stay, so 'openarch app up' starts again with the same data. This
+includes Nuxeo; only a nuxeo-deployment of a setup made before 0.3.0 is a
+project of its own, which you stop in its folder.`,
 		Example: `  openarch app down
   openarch app down --dir ./my-app`,
 		Args: noArgs,
@@ -239,7 +255,8 @@ func newSmokeTestCmd(app *App) *cobra.Command {
 		Short: "Run the upstream test suite against the running stack",
 		Long: `Run the upstream test suite of the profile against the running stack:
 test/test-alfresco.sh (alfresco), test/test-nuxeo.sh (nuxeo) or
-test/smoke-test.sh (full). The suites create test documents and remove them.
+test/test-rag-full.sh (full), the suites of the upstream test/run-tests.sh.
+With the alfresco-2 extra it also runs test/test-two-alfresco.sh. The suites create test documents and remove them.
 They need bash, curl and jq.
 
 In text mode the suite output goes to stdout; in JSON mode it goes to stderr,

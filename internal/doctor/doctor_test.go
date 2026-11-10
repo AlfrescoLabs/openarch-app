@@ -319,8 +319,9 @@ func TestNuxeoDeployment(t *testing.T) {
 	}
 	o := opts()
 	o.Profile = "full"
+	// A missing folder is fine: init fetches it.
 	c := find(t, run(t, f, o), "nuxeo.deployment")
-	if c.Status != Fail || !strings.Contains(c.Fix, "git clone https://github.com/aborroy/nuxeo-deployment.git") || !strings.Contains(c.Fix, "checkout 0a5569054e6b") {
+	if c.Status != OK || !strings.Contains(c.Message, "'openarch app init' fetches it at commit 0a5569054e6b") {
 		t.Errorf("missing: %+v", c)
 	}
 	f.dirs["setup/nuxeo-deployment"] = true

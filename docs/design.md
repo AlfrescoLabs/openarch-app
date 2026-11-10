@@ -55,14 +55,15 @@ openarch-app/
   compose.override.yaml   # generated: OpenArch port, users file and data volume
   openarch-users.yml      # generated OpenArch users (bcrypt hashes), mode 0644
   upstream/               # the upstream repository at the pinned commit, never edited
-  nuxeo-deployment/       # the user adds it, only for the nuxeo and full profiles
+  nuxeo-deployment/       # nuxeo-deployment at its pinned commit, only for the nuxeo and full profiles
 ```
 
-- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 1`, the profile, the extras, the models, the bind IP, the name of the `openarch` context, and the build context SHAs of the last build. It holds no secrets.
+- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the profile, the extras, the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), and the commits of the last build. It holds no secrets.
 - `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
-- Upstream expects `nuxeo-deployment` next to its own repository (`../nuxeo-deployment`). The nuxeo-deployment project publishes Nuxeo on host port 8081. In the first version the user clones it at the commit that `doctor` prints, and starts it.
+- Upstream expects `nuxeo-deployment` next to its own repository (`../nuxeo-deployment`). For the `nuxeo` and `full` profiles, `init` fetches it at its pinned commit, with the same shallow Git fetch as upstream, and records `managedNuxeo: true`. Every Compose call then adds the upstream `compose.nuxeo-deployment.yaml`, which runs Nuxeo and its database in the same project, on the stack network, with port 8081 on `BIND_IP`. So `up`, `down`, `status` and `logs` cover Nuxeo too.
+- A setup made before 0.3.0 has a nuxeo-deployment that the user cloned and started as a second project. Its data is in that project's volumes, so the plugin does not take it over: `upgrade` records `managedNuxeo: false`, and that setup keeps working as before.
 
 Every Compose call has this form:
 
@@ -124,7 +125,7 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 
   Each step can run again, so an upgrade that stops halfway is completed by running `upgrade` again.
 - `upgrade` does not build. The next `up` sees that the upstream commit of the last build differs, builds the images from the new checkout and URLs, and records them.
-- For the Nuxeo profiles, `upgrade` warns when `nuxeo-deployment` is not at the commit of this release, and prints the Git commands.
+- For the Nuxeo profiles, `upgrade` also moves a managed `nuxeo-deployment` to the commit of this release, in the same way as `upstream/`. For a nuxeo-deployment that the user manages, it warns and prints the Git commands.
 - A release that adds a field to `openarch-app.yaml` bumps `schemaVersion`, and its `upgrade` migrates the file. `Load` refuses unknown fields and other versions, so an older binary refuses a newer file.
 - There is no downgrade. The built images have fixed `:local` tags, so the old images are gone after the next `up`.
 
@@ -143,12 +144,12 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 | Command | Built | What it does |
 | --- | --- | --- |
 | `version` | yes | Prints the version. |
-| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the profile, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8082 and 8445 with `alfresco-2`), `nuxeo-deployment` for the Nuxeo profiles, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
-| `init [dir]` | yes | Creates the setup folder, fetches upstream, writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the next commands: `models pull` and `up`, after a `doctor` hint for the Nuxeo profiles. |
+| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the profile, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 for the Nuxeo profiles; 8082 and 8445 with `alfresco-2`), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
+| `init [dir]` | yes | Creates the setup folder, fetches upstream (and nuxeo-deployment for the Nuxeo profiles), writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the next commands: `models pull` and `up`. |
 | `up`, `down`, `status`, `logs` | yes | Run `docker compose up -d --wait`, `down`, `ps` and `logs` with the profile and extras of `openarch-app.yaml`. `up` warns when a model is missing, fails early when nuxeo-deployment is missing, and prints the endpoints. `down` keeps the volumes. `status` exits with code 4 when a service is not healthy. In JSON mode `logs` returns the logs as one field and does not follow them. |
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
 | `upgrade` | yes | Moves the setup to the upstream commit and build contexts of the binary (see Upgrades). |
-| `smoke-test` | yes | Runs the upstream suite of the profile against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/smoke-test.sh` for `full` (it covers both sources). It runs from the setup folder, never from `upstream/`. |
+| `smoke-test` | yes | Runs the upstream suite of the profile against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/test-rag-full.sh` for `full` (it covers both sources). These are the suites of the upstream `test/run-tests.sh`; `test/smoke-test.sh` is a check for a demo host and wants the demo UI at `/`. It runs from the setup folder, never from `upstream/`. |
 
 Flags of `init`:
 
@@ -169,8 +170,8 @@ Flags of `init`:
 | Name | Kind | What it starts |
 | --- | --- | --- |
 | `alfresco` | profile | Hyland OpenArch, the bundled Alfresco and its ingesters, the RAG service, the Alfresco UI and the proxy |
-| `nuxeo` | profile | Hyland OpenArch, the Nuxeo ingesters, the RAG service and the proxy. Needs nuxeo-deployment. |
-| `full` | profile | `alfresco` and `nuxeo` together. Needs nuxeo-deployment. |
+| `nuxeo` | profile | Hyland OpenArch, Nuxeo and its ingesters (Nuxeo from nuxeo-deployment), the RAG service and the proxy |
+| `full` | profile | `alfresco` and `nuxeo` together |
 | `alfresco-2` | extra (an upstream override file) | A second Alfresco with its own ingesters, on host ports 8082 and 8445. Only with `alfresco` or `full`. Upstream limits the JVM memory of both instances to 13.5 GB in total. |
 
 With `alfresco-2`, `rag-service` lists both instances as sources, and it needs the repository id of each (`ALFRESCO_1_SOURCE_ID`, `ALFRESCO_2_SOURCE_ID`). The id is the repository UUID that Alfresco makes at its first boot and that the ingesters already write on every document, so the plugin reads it and never chooses it. `rag-service` refuses to start while it lists two Alfresco sources and an id is empty, and the other services wait for it. So when an id is empty, `up` first starts `alfresco` and `alfresco-2` alone (with their databases and brokers, and always with a wait), reads `repository.id` from `/alfresco/api/discovery` of each instance (with `curl` inside its container, the login on stdin, so it needs neither the proxy nor a published port), writes the ids to `.env.local`, and then starts the whole stack. After every `up --wait` it reads the ids again, writes them when they changed, and recreates only `rag-service`, so the ids also follow a repository that `down -v` replaced. `smoke-test` then also runs `test/test-two-alfresco.sh`.
@@ -178,7 +179,8 @@ With `alfresco-2`, `rag-service` lists both instances as sources, and it needs t
 ## Limits
 
 - Images and models are pulled by tag, as upstream does. Base images and build-time packages inside the remote builds are not pinned. The Nuxeo source is a GitHub archive with no checksum.
-- nuxeo-deployment is outside Rules 2 and 3 in the first version: the plugin does not fetch it, and its port 8081 does not follow `BIND_IP`.
+- `NUXEO_PASSWORD` stays `Administrator` until nuxeo-deployment can set its admin password at the first boot. A nuxeo-deployment that the user manages is outside Rules 2 and 3: its port 8081 does not follow `BIND_IP`.
+- The first `up` of a Nuxeo profile builds Nuxeo from source, which takes long.
 - `NUXEO_PASSWORD` keeps its upstream value, and setups made before 0.2.0 keep the upstream Alfresco admin password.
 - The secrets are tied to the volumes. Losing `.env.local` means losing access to the data.
 - Building the default chat model and running the test suites need `bash`, `curl`, and `jq` or `python3`. On Windows that means Git Bash or WSL.
