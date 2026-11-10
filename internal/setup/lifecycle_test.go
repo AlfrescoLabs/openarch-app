@@ -69,10 +69,17 @@ func newSetup(t *testing.T, c Config) Setup {
 	if err := os.WriteFile(filepath.Join(dir, UpstreamDir, ".env"), []byte("ALFRESCO_ADMIN_USER=admin\nALFRESCO_ADMIN_PASSWORD=admin\nNUXEO_USERNAME=Administrator\nNUXEO_PASSWORD=Administrator\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, EnvFile), []byte("BIND_IP=127.0.0.1\n"), 0o600); err != nil {
+	local := "BIND_IP=127.0.0.1\n"
+	for _, g := range stack.GitContexts {
+		local += g.Var + "=" + g.URL() + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(dir, EnvFile), []byte(local), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	c.SchemaVersion = SchemaVersion
+	if c.Upstream == "" {
+		c.Upstream = stack.UpstreamRef
+	}
 	if c.Profile == "" {
 		c.Profile = "alfresco"
 	}

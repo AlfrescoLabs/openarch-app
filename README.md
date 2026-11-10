@@ -9,7 +9,7 @@ The plugin wraps the upstream [content-lake-app-deployment](https://github.com/A
 
 ## Status
 
-In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `down` and `version`.
+In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
 
 ## Install
 
@@ -56,6 +56,16 @@ openarch app down
 `doctor` checks Docker, Docker Compose, Docker memory for the profile, Git, Docker Model Runner and its models, free ports, `nuxeo-deployment` for the profiles with Nuxeo, and the CLI for OpenArch 0.5.2 or later.
 
 `init` creates the setup folder `./openarch-app`: it fetches upstream at the pinned commit with Git, writes random secrets to `.env.local`, and adds an `openarch` context named `app` for the bundled Hyland OpenArch. `up` builds the images on the first start, waits until every service is healthy, and prints the endpoints. `down` keeps the data.
+
+After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:
+
+```sh
+openarch app down
+openarch app upgrade
+openarch app up
+```
+
+`upgrade` fetches the new commit and rewrites the build-context URLs in `.env.local`. The secrets stay. The next `up` builds the new images.
 
 It also runs on its own as `openarch-app`.
 

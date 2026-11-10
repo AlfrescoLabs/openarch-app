@@ -168,6 +168,9 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 	if err := s.CheckNuxeo(); err != nil {
 		return res, err
 	}
+	if err := s.CheckPins(); err != nil {
+		return res, err
+	}
 	if err := WriteOverride(s.Dir, s.Config); err != nil {
 		return res, err
 	}
@@ -435,6 +438,9 @@ var smokeScripts = map[string]string{
 // Nuxeo logins as environment variables.
 func SmokeTest(ctx context.Context, env Env, s Setup, out io.Writer, st Streams) (SmokeResult, error) {
 	res := SmokeResult{Script: smokeScripts[s.Config.Profile]}
+	if err := s.CheckPins(); err != nil {
+		return res, err
+	}
 	for _, tool := range []string{"bash", "curl", "jq"} {
 		if _, err := env.LookPath(tool); err != nil {
 			return res, output.NewError(output.ExitPrerequisite, tool+" not found in PATH; the upstream test suite needs bash, curl and jq", "")

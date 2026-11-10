@@ -217,10 +217,20 @@ func fetchUpstream(ctx context.Context, env Env, dir string) (bool, error) {
 		}
 		return false, output.Usage(fmt.Sprintf("%s is not a checkout of commit %s", up, stack.UpstreamRef), "Delete "+up+" and run init again.")
 	}
-	// Fetch into a temporary folder, so a failed fetch leaves no upstream/.
-	tmp := up + ".partial"
-	if err := os.RemoveAll(tmp); err != nil {
+	tmp, err := fetchPinned(ctx, env, dir, "init")
+	if err != nil {
 		return false, err
+	}
+	return false, os.Rename(tmp, up)
+}
+
+// fetchPinned fetches the pinned upstream commit into a temporary folder next
+// to upstream/ and returns its path, so a failed fetch leaves upstream/ as it
+// was. cmd names the command to run again after a network error.
+func fetchPinned(ctx context.Context, env Env, dir, cmd string) (string, error) {
+	tmp := filepath.Join(dir, UpstreamDir+".partial")
+	if err := os.RemoveAll(tmp); err != nil {
+		return "", err
 	}
 	steps := [][]string{
 		{"-c", "init.defaultBranch=main", "init", "-q", tmp},
@@ -229,17 +239,17 @@ func fetchUpstream(ctx context.Context, env Env, dir string) (bool, error) {
 	}
 	for _, args := range steps {
 		if _, err := env.Run(ctx, dir, nil, "git", args...); err != nil {
-			return false, output.NewError(output.ExitRemote, "cannot fetch upstream: "+err.Error(), "Check your network, then run init again.")
+			return "", output.NewError(output.ExitRemote, "cannot fetch upstream: "+err.Error(), "Check your network, then run "+cmd+" again.")
 		}
 	}
 	head, err := env.Run(ctx, dir, nil, "git", "-C", tmp, "rev-parse", "HEAD")
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	if got := strings.TrimSpace(string(head)); got != stack.UpstreamRef {
-		return false, fmt.Errorf("upstream checkout is at %s, expected %s", got, stack.UpstreamRef)
+		return "", fmt.Errorf("upstream checkout is at %s, expected %s", got, stack.UpstreamRef)
 	}
-	return false, os.Rename(tmp, up)
+	return tmp, nil
 }
 
 // writeEnv writes .env.local, or keeps an existing one, and returns the

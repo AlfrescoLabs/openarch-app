@@ -18,7 +18,7 @@ Goals of the first version:
 
 Not in the first version:
 
-- Choosing another upstream commit, or changing the commit of an existing setup.
+- Choosing another upstream commit (`--ref`). A setup moves only to the commit of a newer release (see Upgrades).
 - HTTPS. Every port binds to `127.0.0.1` by default.
 - The other upstream profiles and extras: `demo`, `platform`, `debug`, `observability`, `connector`, `sharepoint-mock`, `transform-extras`.
 - More than two Alfresco instances or more than one Nuxeo.
@@ -89,7 +89,7 @@ docker compose -p openarch-app --project-directory upstream \
 
 ## Upstream commit
 
-- The plugin code holds one full commit SHA of upstream, and every setup uses it.
+- The plugin code holds one full commit SHA of upstream. Every new setup uses it, and `upgrade` moves a setup of an earlier release to it.
 - `init` fetches it into `upstream/` with a shallow Git fetch of that SHA (`git fetch --depth 1 <url> <sha>`), checks it out, and checks that `HEAD` is that SHA.
 
 ## Remote build contexts
@@ -105,6 +105,26 @@ Upstream builds some images from remote Git contexts. `.env.local` sets each var
 
 - The SHAs are pinned in the plugin code next to the upstream commit and change with it. BuildKit fetches each commit by its SHA.
 - The built images have fixed tags (`content-lake-app/<service>:local`). So `up` passes `--build` when the pinned SHAs differ from the ones in `openarch-app.yaml`, and then records the new ones.
+
+## Upgrades
+
+A plugin release can pin a newer upstream commit and newer build contexts. `openarch app upgrade` moves a setup to the pins of the binary. It is a separate command, because a new commit can bring images that change the data in the volumes, and there is no way back.
+
+- The plugin code lists the upstream commits of earlier releases. A setup at one of them can be upgraded. A setup at a commit that the binary does not know comes from a newer release, and every command that uses upstream refuses it with "update openarch-app".
+- `up` and `smoke-test` refuse a setup whose upstream commit, or whose build-context URLs in `.env.local`, differ from the pins of the binary, with the hint `openarch app upgrade`. `down`, `status` and `logs` still work, so the user can stop the old stack first.
+- `upgrade` does these steps in order:
+  1. It refuses when a service of the stack is running: stop it with `down`, then back up the volumes.
+  2. It asks for confirmation. `--yes` skips the question, and non-interactive mode needs `--yes`.
+  3. It fetches the pinned commit into `upstream.partial` and checks its `HEAD`. A failed fetch changes nothing.
+  4. It rewrites the four `*_CONTEXT` keys of `.env.local` in place. No other key changes.
+  5. It swaps `upstream.partial` with `upstream/`. Files added inside `upstream/` are lost.
+  6. It records the new commit in `openarch-app.yaml`.
+
+  Each step can run again, so an upgrade that stops halfway is completed by running `upgrade` again.
+- `upgrade` does not build. The next `up` sees that the built SHAs differ, builds the images from the new URLs, and records them.
+- For the Nuxeo profiles, `upgrade` warns when `nuxeo-deployment` is not at the commit of this release, and prints the Git commands.
+- A release that adds a field to `openarch-app.yaml` bumps `schemaVersion`, and its `upgrade` migrates the file. `Load` refuses unknown fields and other versions, so an older binary refuses a newer file.
+- There is no downgrade. The built images have fixed `:local` tags, so the old images are gone after the next `up`.
 
 ## Secure defaults
 
@@ -125,6 +145,7 @@ Upstream builds some images from remote Git contexts. `.env.local` sets each var
 | `init [dir]` | yes | Creates the setup folder, fetches upstream, writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the next commands: `models pull` and `up`, after a `doctor` hint for the Nuxeo profiles. |
 | `up`, `down`, `status`, `logs` | yes | Run `docker compose up -d --wait`, `down`, `ps` and `logs` with the profile and extras of `openarch-app.yaml`. `up` warns when a model is missing, fails early when nuxeo-deployment is missing, and prints the endpoints. `down` keeps the volumes. `status` exits with code 4 when a service is not healthy. In JSON mode `logs` returns the logs as one field and does not follow them. |
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
+| `upgrade` | yes | Moves the setup to the upstream commit and build contexts of the binary (see Upgrades). |
 | `smoke-test` | yes | Runs the upstream suite of the profile against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/smoke-test.sh` for `full` (it covers both sources). It runs from the setup folder, never from `upstream/`. |
 
 Flags of `init`:

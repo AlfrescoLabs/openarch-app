@@ -43,9 +43,12 @@ func newUpCmd(app *App) *cobra.Command {
 profile and extras of openarch-app.yaml. Compose writes its progress to stderr.
 
 up builds the images from the pinned build contexts on the first start, and
-again when an update of openarch-app pins other commits. The first build takes
-several minutes. Then up waits until every service is running or healthy
-(--no-wait skips this) and prints the endpoints.
+again after 'openarch app upgrade'. The first build takes several minutes. Then
+up waits until every service is running or healthy (--no-wait skips this) and
+prints the endpoints.
+
+After an update of openarch-app that pins another upstream commit, up refuses
+the setup until 'openarch app upgrade' has moved it.
 
 The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 		Example: `  openarch app up
@@ -57,6 +60,9 @@ The nuxeo and full profiles need nuxeo-deployment running in the setup folder.`,
 				return err
 			}
 			if err := s.CheckNuxeo(); err != nil {
+				return err
+			}
+			if err := s.CheckPins(); err != nil {
 				return err
 			}
 			opts.Wait = !noWait

@@ -48,6 +48,17 @@ const (
 	ProjectName = "openarch-app"
 )
 
+// PreviousUpstreamRefs are the upstream commits of earlier releases, oldest
+// first. 'upgrade' moves a setup from any of them to UpstreamRef. A setup at a
+// commit that is in neither comes from a newer release.
+var PreviousUpstreamRefs = []string{}
+
+// KnownUpstream reports whether ref is the upstream commit of this release or
+// of an earlier one.
+func KnownUpstream(ref string) bool {
+	return ref == UpstreamRef || slices.Contains(PreviousUpstreamRefs, ref)
+}
+
 // GitContext is one remote BuildKit context of the upstream stack.
 type GitContext struct {
 	// Var is the upstream variable that holds the context URL.

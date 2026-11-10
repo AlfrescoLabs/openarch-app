@@ -1,0 +1,58 @@
+# A setup at the commit of this build has nothing to upgrade.
+cd current
+exec openarch-app upgrade
+stdout 'already uses upstream commit 160f618096c326445cbe4f9c65858f65852dad74'
+exec openarch-app upgrade -o json
+stdout '"changed": false'
+
+# A setup from a newer release is refused by upgrade and by up, before docker runs.
+cd ../newer
+! exec openarch-app upgrade --yes
+stderr 'uses upstream commit 2222222222222222222222222222222222222222, which this build does not know'
+stderr 'update openarch-app'
+! exec openarch-app up
+stderr 'which this build does not know'
+
+# A current commit with old build-context URLs would build old code: up refuses it.
+cd ../oldurls
+! exec openarch-app up
+stderr '.env.local builds CONTENT_LAKE_GIT_CONTEXT from https://github.com/AlfrescoLabs/content-lake-app.git#0000'
+stderr 'openarch app upgrade'
+
+# Every prompt has a flag.
+exec openarch-app upgrade --help
+stdout '--yes'
+
+-- current/openarch-app.yaml --
+schemaVersion: 1
+upstream: 160f618096c326445cbe4f9c65858f65852dad74
+profile: alfresco
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+-- current/.env.local --
+BIND_IP=127.0.0.1
+CONTENT_LAKE_GIT_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app.git#fd220ce85c09749b88610dca6b3f6ce2605740b2
+CONTENT_LAKE_ACS_GIT_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app.git#fd220ce85c09749b88610dca6b3f6ce2605740b2
+CONTENT_LAKE_UI_GIT_CONTEXT=https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git#1df264e4fad2c22c92f151684d3a23bb4c90c819
+CONTENT_LAKE_APP_UI_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app-ui.git#a6ddcbe1b68db6d7030e21a77844a8e848a7aed4
+-- newer/openarch-app.yaml --
+schemaVersion: 1
+upstream: 2222222222222222222222222222222222222222
+profile: alfresco
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+-- oldurls/openarch-app.yaml --
+schemaVersion: 1
+upstream: 160f618096c326445cbe4f9c65858f65852dad74
+profile: alfresco
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+-- oldurls/.env.local --
+BIND_IP=127.0.0.1
+CONTENT_LAKE_GIT_CONTEXT=https://github.com/AlfrescoLabs/content-lake-app.git#0000000000000000000000000000000000000000
