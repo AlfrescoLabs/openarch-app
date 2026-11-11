@@ -89,8 +89,9 @@ func renderProjectOverride(p AlfrescoProject, setupDir string) []byte {
 	b.WriteString(p.networksBlock(p.Broker, brokerAlias))
 	if p.Search == "opensearch" {
 		prefixes := filepath.Join(setupDir, UpstreamDir, "acs", "search", "reindex.prefixes-file.json")
-		fmt.Fprintf(&b, "  %s:\n    environment:\n      ALFRESCO_REINDEX_PREFIXES_FILE: %s\n    volumes:\n      - %s\n",
-			p.Indexer, quote("file:"+prefixesTarget), quote(prefixes+":"+prefixesTarget+":ro"))
+		// The long syntax, because a Windows path holds a colon.
+		fmt.Fprintf(&b, "  %s:\n    environment:\n      ALFRESCO_REINDEX_PREFIXES_FILE: %s\n    volumes:\n      - type: bind\n        source: %s\n        target: %s\n        read_only: true\n",
+			p.Indexer, quote("file:"+prefixesTarget), quote(prefixes), quote(prefixesTarget))
 	}
 	if p.ContentApp != "" {
 		// The image has its own nginx, which forwards /alfresco/ to the

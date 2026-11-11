@@ -43,8 +43,13 @@ func TestRenderProjectOverride(t *testing.T) {
 		Services map[string]struct {
 			Image       string            `yaml:"image"`
 			Environment map[string]string `yaml:"environment"`
-			Volumes     []string          `yaml:"volumes"`
-			Networks    map[string]struct {
+			Volumes     []struct {
+				Type     string `yaml:"type"`
+				Source   string `yaml:"source"`
+				Target   string `yaml:"target"`
+				ReadOnly bool   `yaml:"read_only"`
+			} `yaml:"volumes"`
+			Networks map[string]struct {
 				Aliases []string `yaml:"aliases"`
 			} `yaml:"networks"`
 		} `yaml:"services"`
@@ -78,8 +83,9 @@ func TestRenderProjectOverride(t *testing.T) {
 		}
 	}
 	idx := doc.Services["batch-indexer"]
-	if idx.Environment["ALFRESCO_REINDEX_PREFIXES_FILE"] != "file:"+prefixesTarget ||
-		len(idx.Volumes) != 1 || idx.Volumes[0] != "/home/user/openarch-app/upstream/acs/search/reindex.prefixes-file.json:"+prefixesTarget+":ro" {
+	prefixes := filepath.Join("/home/user/openarch-app", "upstream", "acs", "search", "reindex.prefixes-file.json")
+	if idx.Environment["ALFRESCO_REINDEX_PREFIXES_FILE"] != "file:"+prefixesTarget || len(idx.Volumes) != 1 ||
+		idx.Volumes[0].Type != "bind" || idx.Volumes[0].Source != prefixes || idx.Volumes[0].Target != prefixesTarget || !idx.Volumes[0].ReadOnly {
 		t.Errorf("indexer = %+v", idx)
 	}
 	aca := doc.Services["content-app"]
@@ -122,8 +128,9 @@ func TestInitAlfrescoCompose(t *testing.T) {
 	if local["ALFRESCO_URL"] != "http://openarch-alfresco:8080" || local["ALFRESCO_ADMIN_PASSWORD"] != "adm$pw" || local["ACTIVEMQ_PASSWORD"] != "test-secret" {
 		t.Errorf(".env.local = %v", local)
 	}
+	project, _ := filepath.Abs("/home/user/alfresco")
 	c, err := Load(dir)
-	if err != nil || c.AlfrescoCompose != "/home/user/alfresco" || c.Profile() != "alfresco-external" {
+	if err != nil || c.AlfrescoCompose != project || c.Profile() != "alfresco-external" {
 		t.Fatalf("config = %+v, %v", c, err)
 	}
 	if !slices.ContainsFunc(f.calls, func(call string) bool { return call == "docker compose config --format json" }) {
