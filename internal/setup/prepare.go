@@ -94,8 +94,10 @@ func renderProjectOverride(p AlfrescoProject, setupDir string) []byte {
 	}
 	if p.ContentApp != "" {
 		// The image has its own nginx, which forwards /alfresco/ to the
-		// repository and the App for OpenArch paths to the stack proxy.
-		fmt.Fprintf(&b, "  %s:\n    image: %s\n    environment:\n      APP_CONFIG_ECM_HOST: %s\n      APP_CONFIG_RAG_URL: %s\n      APP_CONFIG_CONTENT_LAKE_URL: %s\n",
+		// repository and the App for OpenArch paths to the stack proxy. nginx
+		// resolves those names at startup and exits while the stack is down,
+		// so the container restarts until the stack proxy is there.
+		fmt.Fprintf(&b, "  %s:\n    image: %s\n    restart: unless-stopped\n    environment:\n      APP_CONFIG_ECM_HOST: %s\n      APP_CONFIG_RAG_URL: %s\n      APP_CONFIG_CONTENT_LAKE_URL: %s\n",
 			p.ContentApp, quote(ContentAppImage(p)), quote("http://"+p.Repository+":8080"), quote("http://"+proxyAlias), quote("http://"+proxyAlias))
 		b.WriteString(p.networksBlock(p.ContentApp, ""))
 	}
@@ -331,9 +333,17 @@ func Prepare(ctx context.Context, env Env, s Setup, opts PrepareOptions, st Stre
 	if err := writeFile(override, data, 0o600); err != nil {
 		return res, err
 	}
-	if err := env.Stream(ctx, p.Dir, nil, st.Err, st.Err, "docker", "compose", "up", "-d", "--wait"); err != nil {
-		return res, output.NewError(output.ExitUnhealthy, "the Alfresco project did not start again: "+err.Error(),
-			"See 'docker compose logs' in "+p.Dir+". To undo, remove "+override+" and run 'docker compose up -d' there.")
+	// Wait for the services that the stack needs. ACA starts after them
+	// without a wait: it runs once the stack proxy is up.
+	wait := []string{"compose", "up", "-d", "--wait", p.Repository, p.Broker}
+	if p.Search == "opensearch" {
+		wait = append(wait, p.Indexer)
+	}
+	for _, args := range [][]string{wait, {"compose", "up", "-d"}} {
+		if err := env.Stream(ctx, p.Dir, nil, st.Err, st.Err, "docker", args...); err != nil {
+			return res, output.NewError(output.ExitUnhealthy, "the Alfresco project did not start again: "+err.Error(),
+				"See 'docker compose logs' in "+p.Dir+". To undo, remove "+override+" and run 'docker compose up -d' there.")
+		}
 	}
 	res.Applied = true
 	res.Steps = nil

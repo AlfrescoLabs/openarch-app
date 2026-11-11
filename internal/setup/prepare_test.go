@@ -263,7 +263,7 @@ func TestPrepare(t *testing.T) {
 		t.Fatalf("apply: %+v, %v, asked %q", res, err, asked)
 	}
 	installed := filepath.Join(project, "docker-compose.override.yml")
-	if !strings.HasPrefix(string(mustRead(t, installed)), OverrideHeader) || !strings.Contains(strings.Join(f.builds, "\n"), "compose up -d --wait") {
+	if !strings.HasPrefix(string(mustRead(t, installed)), OverrideHeader) || !strings.Contains(strings.Join(f.builds, "\n"), "compose up -d --wait alfresco activemq batch-indexer\ncompose up -d") {
 		t.Errorf("apply did not install and recreate: %v", f.builds)
 	}
 	if !slices.Contains(f.runs, "network inspect "+SharedNetwork) {
