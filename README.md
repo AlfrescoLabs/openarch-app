@@ -110,7 +110,7 @@ openarch app alfresco-module ./alfresco-module   # the JAR and the steps for you
 openarch app up
 ```
 
-For an Alfresco that runs with Docker Compose, `--alfresco-compose` points at its project folder instead, and the plugin prepares that Alfresco for you. `alfresco-prepare` builds the repository image of the project plus the module, and ACA of the project's version with the App for OpenArch extension. It writes an override file and shows the steps. With `--apply`, it installs that file in the project and recreates only the changed services:
+For an Alfresco that runs with Docker Compose, `--alfresco-compose` points at its project folder instead, and the plugin prepares that Alfresco for you. `alfresco-prepare` builds the module, and ACA of the project's version with the App for OpenArch extension. It writes an override file, which mounts the module into the project's own repository, and shows the steps. With `--apply`, it installs that file in the project and recreates only the changed services. It never replaces an override file of yours: then it prints how to merge it:
 
 ```sh
 OPENARCH_APP_ALFRESCO_PASSWORD=... openarch app init --alfresco-compose ~/alfresco
@@ -119,7 +119,7 @@ openarch app alfresco-prepare --apply    # makes them (back up Alfresco first)
 openarch app up
 ```
 
-To undo, run `openarch app alfresco-prepare --undo`. Do not only delete the override file: once the module is gone, Alfresco cannot read or update a node that still has a `cl:` aspect. `--undo` removes those aspects first.
+To undo, run `openarch app alfresco-prepare --undo`. Do not only delete the override file: once the module is gone, Alfresco cannot read or update a node that still has a `cl:` aspect. `--undo` removes those aspects first. It works for `--alfresco-env` too: then it removes the aspects, and you remove the module.
 
 With `--alfresco-env`, the file holds `ALFRESCO_URL` and `ALFRESCO_EVENT_BROKER_URL` as the containers reach them (for example `http://host.docker.internal:8180` and `tcp://host.docker.internal:61616`), an administrator login (`ALFRESCO_ADMIN_USER`, `ALFRESCO_ADMIN_PASSWORD`) and the broker login (`ACTIVEMQ_USER`, `ACTIVEMQ_PASSWORD`). It works with `--alfresco 1 --nuxeo 0`. `smoke-test` writes test users and folders into that Alfresco, so it needs `--yes` there. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
