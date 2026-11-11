@@ -1,7 +1,7 @@
 # A setup at the commit of this build has nothing to upgrade.
 cd current
 exec openarch-app upgrade
-stdout 'already uses upstream commit 66615041c84bda9565953a9285e0cbe03db7d01f'
+stdout 'already uses upstream commit ef6b22e4b25f25257bd82fa50c9356036f2aaae4'
 exec openarch-app upgrade -o json
 stdout '"changed": false'
 
@@ -31,7 +31,7 @@ stdout '--yes'
 
 -- current/openarch-app.yaml --
 schemaVersion: 2
-upstream: 66615041c84bda9565953a9285e0cbe03db7d01f
+upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
 alfresco: 1
 nuxeo: 0
 llmModel: ai/qwen2.5
@@ -63,7 +63,7 @@ bindIP: 127.0.0.1
 context: app
 -- oldurls/openarch-app.yaml --
 schemaVersion: 2
-upstream: 66615041c84bda9565953a9285e0cbe03db7d01f
+upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
 alfresco: 1
 nuxeo: 0
 llmModel: ai/qwen2.5
