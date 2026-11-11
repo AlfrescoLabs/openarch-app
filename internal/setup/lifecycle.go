@@ -229,6 +229,16 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 		return res, err
 	}
 	if s.Config.AlfrescoCompose != "" {
+		// The stack needs the module and the shared network in the project
+		// first; without them every check after the start fails.
+		p, err := InspectAlfrescoProject(ctx, env, s.Config.AlfrescoCompose)
+		if err != nil {
+			return res, err
+		}
+		if !p.Prepared() {
+			return res, output.Usage("the Alfresco project "+s.Config.AlfrescoCompose+" is not prepared for App for OpenArch",
+				"Run 'openarch app alfresco-prepare --apply' first (or without --apply, for the steps).")
+		}
 		if err := EnsureSharedNetwork(ctx, env); err != nil {
 			return res, err
 		}

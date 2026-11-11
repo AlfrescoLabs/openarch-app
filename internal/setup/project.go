@@ -36,6 +36,10 @@ type AlfrescoProject struct {
 	// The secrets of the project, never printed.
 	brokerPassword string
 	javaOpts       string
+	// indexerPrefixes is ALFRESCO_REINDEX_PREFIXES_FILE of the indexer, and
+	// repositoryMounts are the container paths of the repository's volumes.
+	indexerPrefixes  string
+	repositoryMounts []string
 	// networks maps each service to the networks it joins.
 	networks map[string][]string
 }
@@ -51,6 +55,9 @@ type composeConfig struct {
 		} `json:"build"`
 		Environment map[string]*string         `json:"environment"`
 		Networks    map[string]json.RawMessage `json:"networks"`
+		Volumes     []struct {
+			Target string `json:"target"`
+		} `json:"volumes"`
 	} `json:"services"`
 }
 
@@ -123,6 +130,9 @@ func parseAlfrescoProject(dir string, data []byte) (AlfrescoProject, error) {
 			}
 		case strings.Contains(img, "alfresco-elasticsearch-batch-indexing"):
 			p.Indexer, p.Search = n, "opensearch"
+			if v := s.Environment["ALFRESCO_REINDEX_PREFIXES_FILE"]; v != nil {
+				p.indexerPrefixes = *v
+			}
 		case strings.Contains(img, "alfresco-search-services") || strings.Contains(img, "solr"):
 			p.Indexer, p.Search = n, "solr"
 		case strings.Contains(img, "alfresco-content-app"):
@@ -139,6 +149,9 @@ func parseAlfrescoProject(dir string, data []byte) (AlfrescoProject, error) {
 	repo := cfg.Services[p.Repository]
 	if v := repo.Environment["JAVA_OPTS"]; v != nil {
 		p.javaOpts = *v
+	}
+	for _, v := range repo.Volumes {
+		p.repositoryMounts = append(p.repositoryMounts, v.Target)
 	}
 	p.RepositoryImage = repo.Image
 	p.ACSVersion = imageTag(repo.Image)

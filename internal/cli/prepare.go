@@ -19,26 +19,30 @@ func newAlfrescoPrepareCmd(app *App) *cobra.Command {
 		Use:   "alfresco-prepare",
 		Short: "Prepare the existing Alfresco project for App for OpenArch",
 		Long: `Prepare the Docker Compose project of an existing Alfresco (init
---alfresco-compose) for App for OpenArch. alfresco-prepare builds two images:
+--alfresco-compose) for App for OpenArch. alfresco-prepare builds the
+content-lake-repo-model module JAR, and ACA of the project's version with the
+App for OpenArch extension.
 
-  the repository image of the project plus the content-lake-repo-model module
-  ACA of the project's version with the App for OpenArch extension
+Then it writes alfresco-compose.override.yaml and the alfresco-prepare/openarch-app
+folder in the setup folder. The override file mounts the JAR into the
+repository of the project (which keeps its own image) and adds the module
+properties, mounts the cl: prefix file into the search indexer, replaces the
+ACA image, and adds a Docker network that the project and the stack share.
+Without --apply, nothing in the project changes: the command prints the steps.
 
-Then it writes alfresco-compose.override.yaml in the setup folder. That file
-replaces the repository and ACA services of the project with those images,
-adds the module properties, the cl: prefix of the search indexer, and a Docker
-network that the project and the stack share. Without --apply, nothing in the
-project changes: the command prints the steps to apply the file.
-
-With --apply, it installs the file as the override file of the project and
-runs 'docker compose up -d --wait' there, which recreates only the changed
-services. It asks for confirmation; --yes skips the question, and
+With --apply, it copies the folder into the project, installs the file as the
+override file that Compose merges, and runs 'docker compose up -d' there,
+which recreates only the changed services. It refuses a project that has an
+override file of its own, or that sets COMPOSE_FILE: then run it without
+--apply for the steps. It asks for confirmation; --yes skips the question, and
 non-interactive mode needs --yes. Back up the Alfresco database and content
 store first.
 
 --undo removes it again. It stops the ingesters of the stack, removes the cl:
 aspects from every node while the module is still installed, removes the
-override file, recreates the services of the project, and stops the stack. Do
+override file and the openarch-app folder, recreates the services of the
+project, and stops the stack. With --alfresco-env, or with a merged override
+file, it removes the aspects and prints what you remove yourself. Do
 not only delete the override file: a node that keeps a cl: aspect cannot be
 read or updated once the module is gone. --undo asks for confirmation too.`,
 		Example: `  openarch app alfresco-prepare

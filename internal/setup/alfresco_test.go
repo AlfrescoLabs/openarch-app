@@ -201,7 +201,9 @@ func TestAlfrescoModule(t *testing.T) {
 			t.Errorf("call %q lacks %q", call, want)
 		}
 	}
-	if res.JAR != filepath.Join(out, "content-lake-repo-model-1.0.0.jar") || !strings.Contains(res.Steps[len(res.Steps)-1], "https://github.com/AlfrescoLabs/alfresco-content-lake-ui/tree/e289a06") {
+	steps := strings.Join(res.Steps, "\n")
+	if res.JAR != filepath.Join(out, "content-lake-repo-model-1.0.0.jar") || !strings.Contains(steps, "https://github.com/AlfrescoLabs/alfresco-content-lake-ui/tree/e289a06") ||
+		!strings.Contains(res.Steps[len(res.Steps)-1], "alfresco-prepare --undo") {
 		t.Errorf("result = %+v", res)
 	}
 }

@@ -94,6 +94,7 @@ func alfrescoSource(c *Config, path string) (map[string]string, error) {
 		// The stack has no bundled broker, so the transform engine works over
 		// HTTP only.
 		"TRANSFORM_ACTIVEMQ_URL": "false",
+		"INGESTION_FOLDER_1":     noIngestionFolder,
 	}
 	for k, v := range values {
 		if strings.ContainsRune(v, '\'') || strings.ContainsFunc(v, unicode.IsControl) {
@@ -147,6 +148,7 @@ func alfrescoModuleSteps(jar string) []string {
 		"Restart Alfresco.",
 		"Optional, for the App for OpenArch search and chat in ACA: rebuild your ACA with the extension of " + uiContext() +
 			" (its README, 'Install into ACA'), and send /api/rag/ and /api/content-lake/ of its proxy to the stack proxy.",
+		"To remove the module later, run 'openarch app alfresco-prepare --undo' first, while it is still installed: it removes the cl: aspects, and a node that keeps one cannot be read once the module is gone. Then remove the JAR and the properties, and restart Alfresco.",
 	}
 }
 

@@ -20,7 +20,7 @@ func TestParseAlfrescoProject(t *testing.T) {
 	want := AlfrescoProject{Dir: "/home/user/alfresco", Name: "stock", Repository: "alfresco", Broker: "activemq", Indexer: "batch-indexer",
 		ContentApp: "content-app", RepositoryImage: "stock-alfresco", ACSVersion: "26.2.0", ACAVersion: "8.0.0", Search: "opensearch", BrokerUser: "admin"}
 	got := p
-	got.brokerPassword, got.javaOpts, got.networks = "", "", nil
+	got.brokerPassword, got.javaOpts, got.networks, got.repositoryMounts = "", "", nil, nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
 	}
