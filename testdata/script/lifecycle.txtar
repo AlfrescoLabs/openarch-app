@@ -31,7 +31,7 @@ stderr 'openarch app upgrade'
 schemaVersion: 9
 -- setup/openarch-app.yaml --
 schemaVersion: 2
-upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
+upstream: 66615041c84bda9565953a9285e0cbe03db7d01f
 alfresco: 1
 nuxeo: 0
 llmModel: ai/qwen2.5
@@ -41,7 +41,7 @@ context: app
 -- nuxeo/openarch-app.yaml --
 schemaVersion: 2
 managedNuxeo: true
-upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
+upstream: 66615041c84bda9565953a9285e0cbe03db7d01f
 alfresco: 1
 nuxeo: 1
 llmModel: ai/qwen2.5
@@ -50,7 +50,7 @@ bindIP: 127.0.0.1
 context: app
 -- v1/openarch-app.yaml --
 schemaVersion: 1
-upstream: 1a0f58791dd550058507b3cd9f7bc390025e214a
+upstream: 66615041c84bda9565953a9285e0cbe03db7d01f
 profile: full
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large
