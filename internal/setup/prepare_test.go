@@ -333,6 +333,11 @@ func TestPrepare(t *testing.T) {
 			t.Errorf("steps lack %q:\n%s", want, steps)
 		}
 	}
+	// The override file needs the external network, so the steps create it before Compose runs.
+	network, compose := strings.Index(steps, "docker network create "+SharedNetwork), strings.Index(steps, "Run 'docker compose up -d'")
+	if network < 0 || compose < 0 || network > compose {
+		t.Errorf("steps do not create the shared network before 'docker compose up -d':\n%s", steps)
+	}
 	builds := strings.Join(f.builds, "\n")
 	if strings.Contains(builds, "compose build") || strings.Contains(builds, ":module") {
 		t.Errorf("the repository image was rebuilt:\n%s", builds)

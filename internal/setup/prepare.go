@@ -434,6 +434,9 @@ func prepareSteps(res PrepareResult, p AlfrescoProject, l projectLayout) []strin
 		steps = append(steps, "Compose merges no override file while COMPOSE_FILE is set ("+l.composeFile+"): add "+filepath.Base(l.override)+" to COMPOSE_FILE.")
 	}
 	return append(steps,
+		// The override file declares the shared network as external, so Compose refuses
+		// to start the project until it exists. Only --apply and 'up' create it.
+		"Create the shared network once: 'docker network create "+SharedNetwork+"' (skip it if 'docker network ls' lists it).",
 		"Run 'docker compose up -d' in "+p.Dir+". Compose recreates only the changed services.",
 		"Run 'openarch app up'.")
 }
