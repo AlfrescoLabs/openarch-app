@@ -18,7 +18,7 @@ import (
 
 func newInitCmd(app *App) *cobra.Command {
 	var sf sourceFlags
-	var cmisStdin bool
+	var cmisStdin, alfrescoStdin bool
 	opts := setup.InitOptions{Settings: setup.Config{
 		LLMModel:       stack.DefaultLLMModel,
 		EmbeddingModel: stack.DefaultEmbeddingModel,
@@ -81,7 +81,14 @@ ActiveMQ, for example tcp://host.docker.internal:61616), ALFRESCO_ADMIN_USER
 and ALFRESCO_ADMIN_PASSWORD (an administrator), ACTIVEMQ_USER and
 ACTIVEMQ_PASSWORD, and optionally CONTENT_LAKE_PERMISSION_SYNC_BROKER_URL and
 ALFRESCO_PROXY_UPSTREAM. init never changes that Alfresco: install the module
-of 'openarch app alfresco-module' there first. up checks it.`,
+of 'openarch app alfresco-module' there first. up checks it.
+
+--alfresco-compose does the same for an Alfresco that runs with Docker
+Compose: give the folder where you run 'docker compose up' for it. init reads
+that project and its broker login, and asks for the password of --alfresco-user
+(or reads OPENARCH_APP_ALFRESCO_PASSWORD, or stdin with
+--alfresco-password-stdin). 'openarch app alfresco-prepare' then shows the
+changes for that project, and makes them with --apply.`,
 		Example: `  openarch app init                            # one Alfresco
   openarch app init --alfresco 2               # two Alfresco instances
   openarch app init --alfresco 1 --nuxeo 1     # one Alfresco and one Nuxeo
@@ -92,6 +99,7 @@ of 'openarch app alfresco-module' there first. up checks it.`,
   openarch app init --filesystem ~/Documents/shared \
     --filesystem-reader jim --filesystem-reader dwight
   openarch app init --alfresco-env alfresco.env   # an Alfresco you already run
+  openarch app init --alfresco-compose ~/alfresco  # the same, on Docker Compose
   openarch app init ./my-app --llm-model ai/qwen2.5 --output json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -110,7 +118,14 @@ of 'openarch app alfresco-module' there first. up checks it.`,
 			if cmisStdin && opts.CMISEnv == "" {
 				return output.Usage("--cmis-password-stdin needs --cmis-env", "")
 			}
-			opts.CMISPassword = app.cmisPassword(cmisStdin)
+			if alfrescoStdin && opts.AlfrescoCompose == "" {
+				return output.Usage("--alfresco-password-stdin needs --alfresco-compose", "")
+			}
+			if cmisStdin && alfrescoStdin {
+				return output.Usage("--cmis-password-stdin and --alfresco-password-stdin cannot be combined", "Set one of the passwords with its variable instead.")
+			}
+			opts.CMISPassword = app.secret(cmisStdin, envCMISPassword, "CMIS password: ")
+			opts.AlfrescoPassword = app.secret(alfrescoStdin, envAlfrescoPassword, "Alfresco admin password: ")
 			opts.OpenArchBin = os.Getenv(envBin)
 			res, err := setup.Init(cmd.Context(), app.setupEnv(), opts)
 			if err != nil {
@@ -134,19 +149,25 @@ of 'openarch app alfresco-module' there first. up checks it.`,
 	f.StringVar(&opts.CMISEnv, "cmis-env", "", "file with the settings of a CMIS source (CMIS_URL, CMIS_USERNAME, ...)")
 	f.BoolVar(&cmisStdin, "cmis-password-stdin", false, "read the CMIS password from the first line of stdin")
 	f.StringVar(&opts.AlfrescoEnv, "alfresco-env", "", "file with the URLs and logins of an existing Alfresco that replaces the bundled one")
+	f.StringVar(&opts.AlfrescoCompose, "alfresco-compose", "", "folder of the Docker Compose project of an existing Alfresco that replaces the bundled one")
+	f.StringVar(&opts.AlfrescoUser, "alfresco-user", "admin", "admin user of the existing Alfresco of --alfresco-compose")
+	f.BoolVar(&alfrescoStdin, "alfresco-password-stdin", false, "read the password of --alfresco-user from the first line of stdin")
 	f.BoolVar(&s.DefaultSecrets, "default-secrets", false, "keep the upstream secrets instead of random ones")
 	f.BoolVar(&s.DefaultUsers, "default-users", false, "keep the upstream OpenArch users (admin:password)")
 	f.BoolVar(&opts.Force, "force", false, "replace an openarch context with the same name")
 	return cmd
 }
 
-// envCMISPassword holds the CMIS password for init --cmis-env.
-const envCMISPassword = "OPENARCH_APP_CMIS_PASSWORD"
+// The variables that hold the passwords of init: the CMIS password for
+// --cmis-env, and the Alfresco admin password for --alfresco-compose.
+const (
+	envCMISPassword     = "OPENARCH_APP_CMIS_PASSWORD"
+	envAlfrescoPassword = "OPENARCH_APP_ALFRESCO_PASSWORD"
+)
 
-// cmisPassword returns how init gets the CMIS password when the --cmis-env
-// file has none: the first line of stdin, the variable, or a prompt. It
-// returns nil when there is no way.
-func (a *App) cmisPassword(stdin bool) func() (string, error) {
+// secret returns how init gets a password: the first line of stdin, the
+// variable envVar, or a prompt. It returns nil when there is no way.
+func (a *App) secret(stdin bool, envVar, prompt string) func() (string, error) {
 	switch {
 	case stdin:
 		return func() (string, error) {
@@ -156,10 +177,10 @@ func (a *App) cmisPassword(stdin bool) func() (string, error) {
 			}
 			return strings.TrimRight(line, "\r\n"), nil
 		}
-	case os.Getenv(envCMISPassword) != "":
-		return func() (string, error) { return os.Getenv(envCMISPassword), nil }
+	case os.Getenv(envVar) != "":
+		return func() (string, error) { return os.Getenv(envVar), nil }
 	case a.Interactive():
-		return func() (string, error) { return term.ReadPassword(a.Streams.In, a.Streams.Err, "CMIS password: ") }
+		return func() (string, error) { return term.ReadPassword(a.Streams.In, a.Streams.Err, prompt) }
 	}
 	return nil
 }

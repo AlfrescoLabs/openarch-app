@@ -246,7 +246,18 @@ func renderOverride(c Config) []byte {
 	b.WriteString("    depends_on:\n      " + openArchVolumeInit + ":\n        condition: service_completed_successfully\n")
 	fmt.Fprintf(&b, "  %s:\n    image: %s\n    command: [\"chown\", \"33010:1000\", \"/data\"]\n", openArchVolumeInit, initImage)
 	b.WriteString("    network_mode: none\n    volumes:\n      - " + openArchVolume + ":/data\n")
+	if c.AlfrescoCompose != "" {
+		// The clients of an existing Alfresco project reach it, and its ACA
+		// reaches the proxy, on the shared network.
+		for _, svc := range []string{"batch-ingester", "live-ingester", "rag-service"} {
+			fmt.Fprintf(&b, "  %s:\n    networks:\n      %s: {}\n", svc, SharedNetwork)
+		}
+		fmt.Fprintf(&b, "  proxy:\n    networks:\n      %s:\n        aliases: [%s]\n", SharedNetwork, proxyAlias)
+	}
 	b.WriteString("volumes:\n  " + openArchVolume + ":\n")
+	if c.AlfrescoCompose != "" {
+		fmt.Fprintf(&b, "networks:\n  %s:\n    external: true\n", SharedNetwork)
+	}
 	return []byte(b.String())
 }
 

@@ -63,6 +63,10 @@ type Config struct {
 	// replaces the bundled one, or empty. It is optional too. Its logins are in
 	// .env.local only.
 	ExternalAlfresco string `yaml:"externalAlfresco,omitempty" json:"externalAlfresco,omitempty"`
+	// AlfrescoCompose is the folder of the Docker Compose project of the
+	// existing Alfresco, when the plugin prepares it (alfresco-prepare). The
+	// two projects meet on the shared network.
+	AlfrescoCompose string `yaml:"alfrescoCompose,omitempty" json:"alfrescoCompose,omitempty"`
 	// BuiltContexts maps each build context variable, and "upstream", to the
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`

@@ -1,11 +1,15 @@
 package setup
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
+
+	"github.com/AlfrescoLabs/openarch-app/internal/output"
 )
 
 // Names that join an existing Alfresco project and the stack. Both projects
@@ -111,4 +115,62 @@ func (p AlfrescoProject) networksBlock(service, alias string) string {
 		fmt.Fprintf(&b, "      %s:\n        aliases: [%s]\n", SharedNetwork, alias)
 	}
 	return b.String()
+}
+
+// alfrescoComposeSource reads the Compose project of opts.AlfrescoCompose and
+// returns the .env.local values that point the stack at its Alfresco.
+func alfrescoComposeSource(ctx context.Context, env Env, c *Config, opts InitOptions) (map[string]string, error) {
+	if opts.AlfrescoEnv != "" {
+		return nil, output.Usage("--alfresco-compose and --alfresco-env cannot be combined", "Use --alfresco-compose for an Alfresco on Docker Compose, --alfresco-env for any other.")
+	}
+	if c.Alfresco != 1 || c.Nuxeo != 0 {
+		return nil, output.Usage("--alfresco-compose works with --alfresco 1 --nuxeo 0 only", "An existing Alfresco replaces the bundled one, and it is tested without other sources.")
+	}
+	dir, err := filepath.Abs(opts.AlfrescoCompose)
+	if err != nil {
+		return nil, err
+	}
+	p, err := InspectAlfrescoProject(ctx, env, dir)
+	if err != nil {
+		return nil, err
+	}
+	if p.BrokerUser == "" || p.brokerPassword == "" {
+		return nil, output.Usage("cannot find the broker login of "+dir, "The project sets neither ACTIVEMQ_ADMIN_LOGIN/PASSWORD on "+p.Broker+" nor messaging.broker.username/password in JAVA_OPTS.")
+	}
+	user := opts.AlfrescoUser
+	if user == "" {
+		user = "admin"
+	}
+	if opts.AlfrescoPassword == nil {
+		return nil, output.Usage("the password of the Alfresco admin is missing", "Set OPENARCH_APP_ALFRESCO_PASSWORD, or use --alfresco-password-stdin.")
+	}
+	password, err := opts.AlfrescoPassword()
+	if err != nil {
+		return nil, err
+	}
+	if password == "" {
+		return nil, output.Usage("the password of the Alfresco admin is empty", "")
+	}
+	quoted := map[string]string{}
+	for k, v := range alfrescoStackValues(p, user, password) {
+		if strings.ContainsRune(v, '\'') || strings.ContainsFunc(v, unicode.IsControl) {
+			return nil, output.Usage(fmt.Sprintf("the Alfresco setting %s has a single quote or a control character", k), "init writes the values in single quotes to "+EnvFile+".")
+		}
+		quoted[k] = "'" + v + "'"
+	}
+	c.AlfrescoCompose = dir
+	c.ExternalAlfresco = "http://" + alfrescoAlias + ":8080"
+	return quoted, nil
+}
+
+// EnsureSharedNetwork creates the network that an existing Alfresco project
+// and the stack share, when it does not exist yet.
+func EnsureSharedNetwork(ctx context.Context, env Env) error {
+	if _, err := env.Run(ctx, "", nil, "docker", "network", "inspect", SharedNetwork); err == nil {
+		return nil
+	}
+	if _, err := env.Run(ctx, "", nil, "docker", "network", "create", SharedNetwork); err != nil {
+		return output.NewError(output.ExitPrerequisite, "cannot create the Docker network "+SharedNetwork+": "+err.Error(), "")
+	}
+	return nil
 }

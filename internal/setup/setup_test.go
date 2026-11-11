@@ -264,6 +264,9 @@ type fakeSystem struct {
 	head          string
 	calls         []string
 	passwordIn    string
+	// composeConfig is the output of 'docker compose config' of an existing
+	// Alfresco project.
+	composeConfig []byte
 }
 
 const upstreamEnv = "HXPR_USERNAME=admin\nHXPR_PASSWORD=password\nBIND_IP=0.0.0.0\n"
@@ -303,6 +306,8 @@ func (f *fakeSystem) env() Env {
 					head = stack.NuxeoDeploymentRef
 				}
 				return []byte(head + "\n"), nil
+			case strings.HasPrefix(call, "docker compose config") && f.composeConfig != nil:
+				return f.composeConfig, nil
 			}
 			return nil, errors.New("unexpected call " + call)
 		},

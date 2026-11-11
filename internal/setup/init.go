@@ -95,6 +95,12 @@ type InitOptions struct {
 	// AlfrescoEnv is a file with the URLs and logins of an existing Alfresco
 	// that replaces the bundled one, or empty.
 	AlfrescoEnv string
+	// AlfrescoCompose is the folder of the Docker Compose project of an
+	// existing Alfresco, or empty. AlfrescoUser is its admin user, and
+	// AlfrescoPassword returns the password.
+	AlfrescoCompose  string
+	AlfrescoUser     string
+	AlfrescoPassword func() (string, error)
 }
 
 // DefaultAlfrescoNames are the names of the two Alfresco sources when init
@@ -149,7 +155,10 @@ func (r InitResult) WriteText(w io.Writer) error {
 	if r.Config.CMIS != "" {
 		what += ", CMIS " + r.Config.CMIS
 	}
-	if r.Config.ExternalAlfresco != "" {
+	switch {
+	case r.Config.AlfrescoCompose != "":
+		what = "the Alfresco of " + r.Config.AlfrescoCompose + strings.TrimPrefix(what, "1 Alfresco")
+	case r.Config.ExternalAlfresco != "":
 		what = "the existing Alfresco " + r.Config.ExternalAlfresco + strings.TrimPrefix(what, "1 Alfresco")
 	}
 	if r.Config.SampleUI {
@@ -200,6 +209,11 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 	existing, err := alfrescoSource(&c, opts.AlfrescoEnv)
 	if err != nil {
 		return InitResult{}, err
+	}
+	if opts.AlfrescoCompose != "" {
+		if existing, err = alfrescoComposeSource(ctx, env, &c, opts); err != nil {
+			return InitResult{}, err
+		}
 	}
 	if len(existing) > 0 && source == nil {
 		source = map[string]string{}
@@ -302,7 +316,10 @@ func nextSteps(c Config, dir string) []string {
 		up += "   (the first start builds Nuxeo from source, which takes long)"
 	}
 	steps := []string{"openarch app models pull" + flag}
-	if c.ExternalAlfresco != "" {
+	switch {
+	case c.AlfrescoCompose != "":
+		steps = append(steps, "openarch app alfresco-prepare"+flag+"   (shows the changes for the Alfresco project; --apply makes them)")
+	case c.ExternalAlfresco != "":
 		steps = append(steps, "openarch app alfresco-module ./alfresco-module"+flag+"   (then install it in the existing Alfresco and restart it)")
 	}
 	steps = append(steps, up)

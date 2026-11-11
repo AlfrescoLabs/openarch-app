@@ -127,13 +127,18 @@ type UpResult struct {
 	// ExternalAlfresco is the URL of the existing Alfresco that replaces the
 	// bundled one, or empty.
 	ExternalAlfresco string `json:"externalAlfresco,omitempty"`
+	// AlfrescoCompose is the Compose project of that Alfresco, or empty.
+	AlfrescoCompose string `json:"alfrescoCompose,omitempty"`
 }
 
 // WriteText writes the human-readable form.
 func (r UpResult) WriteText(w io.Writer) error {
 	var b strings.Builder
 	what := r.String()
-	if r.ExternalAlfresco != "" {
+	switch {
+	case r.AlfrescoCompose != "":
+		what = "the Alfresco of " + r.AlfrescoCompose
+	case r.ExternalAlfresco != "":
 		what = "the existing Alfresco " + r.ExternalAlfresco
 	}
 	fmt.Fprintf(&b, "App for OpenArch is up (%s).\n\n", what)
@@ -213,7 +218,7 @@ func (s Setup) MissingModels(ctx context.Context, env Env) []string {
 
 // Up starts the stack. Compose writes its progress to st.Err.
 func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpResult, error) {
-	res := UpResult{Dir: s.Dir, Sources: s.Config.Sources, ExternalAlfresco: s.Config.ExternalAlfresco}
+	res := UpResult{Dir: s.Dir, Sources: s.Config.Sources, ExternalAlfresco: s.Config.ExternalAlfresco, AlfrescoCompose: s.Config.AlfrescoCompose}
 	if err := s.CheckNuxeo(); err != nil {
 		return res, err
 	}
@@ -222,6 +227,11 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 	}
 	if err := WriteOverride(s.Dir, s.Config); err != nil {
 		return res, err
+	}
+	if s.Config.AlfrescoCompose != "" {
+		if err := EnsureSharedNetwork(ctx, env); err != nil {
+			return res, err
+		}
 	}
 	args := []string{"up", "-d"}
 	res.Built = s.NeedsBuild()

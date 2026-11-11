@@ -1,11 +1,18 @@
 package setup
 
 import (
+	"context"
+	"errors"
+	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/AlfrescoLabs/openarch-app/internal/output"
 )
 
 func fixtureProject(t *testing.T) AlfrescoProject {
@@ -98,5 +105,76 @@ func TestAlfrescoStackValues(t *testing.T) {
 		if v[k] != want {
 			t.Errorf("%s = %q, want %q", k, v[k], want)
 		}
+	}
+}
+
+func TestInitAlfrescoCompose(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "setup")
+	opts := initOpts(dir)
+	opts.AlfrescoCompose = "/home/user/alfresco"
+	opts.AlfrescoPassword = func() (string, error) { return "adm$pw", nil }
+	f := &fakeSystem{composeConfig: mustRead(t, "testdata/compose-installer-26.2.json")}
+	res, err := Init(context.Background(), f.env(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := ParseEnv(mustRead(t, filepath.Join(dir, EnvFile)))
+	if local["ALFRESCO_URL"] != "http://openarch-alfresco:8080" || local["ALFRESCO_ADMIN_PASSWORD"] != "adm$pw" || local["ACTIVEMQ_PASSWORD"] != "test-secret" {
+		t.Errorf(".env.local = %v", local)
+	}
+	c, err := Load(dir)
+	if err != nil || c.AlfrescoCompose != "/home/user/alfresco" || c.Profile() != "alfresco-external" {
+		t.Fatalf("config = %+v, %v", c, err)
+	}
+	if !slices.ContainsFunc(f.calls, func(call string) bool { return call == "docker compose config --format json" }) {
+		t.Errorf("calls = %v", f.calls)
+	}
+	if !strings.HasPrefix(res.Next[1], "openarch app alfresco-prepare --dir "+dir) {
+		t.Errorf("next = %v", res.Next)
+	}
+	// The stack services join the shared network, the proxy with its alias.
+	override := string(mustRead(t, filepath.Join(dir, OverrideFile)))
+	for _, want := range []string{"  rag-service:\n    networks:\n      openarch-app-alfresco: {}", "  proxy:\n    networks:\n      openarch-app-alfresco:\n        aliases: [openarch-app-proxy]",
+		"networks:\n  openarch-app-alfresco:\n    external: true"} {
+		if !strings.Contains(override, want) {
+			t.Errorf("override lacks %q:\n%s", want, override)
+		}
+	}
+
+	for _, c := range []struct {
+		name string
+		mod  func(*InitOptions)
+		want string
+	}{
+		{"with env file", func(o *InitOptions) { o.AlfrescoEnv = writeCMIS(t, goodAlfrescoEnv) }, "cannot be combined"},
+		{"with Nuxeo", func(o *InitOptions) { o.Settings.Nuxeo = 1 }, "works with --alfresco 1 --nuxeo 0 only"},
+		{"no password", func(o *InitOptions) { o.AlfrescoPassword = nil }, "password of the Alfresco admin is missing"},
+	} {
+		o := initOpts(filepath.Join(t.TempDir(), "setup"))
+		o.AlfrescoCompose = "/home/user/alfresco"
+		o.AlfrescoPassword = func() (string, error) { return "pw", nil }
+		c.mod(&o)
+		if _, err := Init(context.Background(), f.env(), o); output.CodeOf(err) != output.ExitUsage || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+}
+
+func TestEnsureSharedNetwork(t *testing.T) {
+	var calls []string
+	exists := false
+	env := Env{Run: func(_ context.Context, _ string, _ io.Reader, name string, args ...string) ([]byte, error) {
+		calls = append(calls, strings.Join(args, " "))
+		if args[1] == "inspect" && !exists {
+			return nil, errors.New("no such network")
+		}
+		return nil, nil
+	}}
+	if err := EnsureSharedNetwork(context.Background(), env); err != nil || strings.Join(calls, ",") != "network inspect openarch-app-alfresco,network create openarch-app-alfresco" {
+		t.Errorf("create: %v, %v", calls, err)
+	}
+	calls, exists = nil, true
+	if err := EnsureSharedNetwork(context.Background(), env); err != nil || len(calls) != 1 {
+		t.Errorf("exists: %v, %v", calls, err)
 	}
 }
