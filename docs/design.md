@@ -57,7 +57,7 @@ openarch-app/
   nuxeo-deployment/       # nuxeo-deployment at its pinned commit, only with Nuxeo
 ```
 
-- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), the URL of the CMIS source (`cmis`), the URL of an existing Alfresco (`externalAlfresco`), and the commits of the last build. It holds no secrets.
+- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), the URL of the CMIS source (`cmis`), the URL of an existing Alfresco (`externalAlfresco`) and the folder of its Compose project (`alfrescoCompose`), and the commits of the last build. It holds no secrets.
 - `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
@@ -149,6 +149,7 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
 | `upgrade` | yes | Moves the setup to the upstream commit and build contexts of the binary (see Upgrades). |
 | `smoke-test` | yes | Runs the upstream suite of the sources against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/test-rag-full.sh` for `full` (it covers both sources). These are the suites of the upstream `test/run-tests.sh`; `test/smoke-test.sh` is a check for a demo host and wants the demo UI at `/`. It runs from the setup folder, never from `upstream/`. |
+| `alfresco-prepare` | yes | Builds the images for the Compose project of an existing Alfresco and writes the override file that uses them. `--apply` installs it in the project and recreates the changed services (see Existing Alfresco). |
 | `alfresco-module` | yes | Builds the repository module JAR for an existing Alfresco from the pinned commit, and prints the steps to install it (see Existing Alfresco). |
 | `sync` | yes | Starts a sync of the filesystem or CMIS source and waits for the job (see Filesystem source). Exit code 4 means the job failed, a file failed, or the job still runs after `--timeout`. |
 
@@ -170,6 +171,8 @@ Flags of `init`:
 | `--cmis-env` | none | File with the settings of a CMIS source (see CMIS source) |
 | `--cmis-password-stdin` | off | Read the CMIS password from the first line of stdin |
 | `--alfresco-env` | none | File with the URLs and logins of an existing Alfresco that replaces the bundled one (see Existing Alfresco) |
+| `--alfresco-compose` | none | Folder of the Docker Compose project of an existing Alfresco that replaces the bundled one (see Existing Alfresco) |
+| `--alfresco-user` | `admin` | Admin user of that Alfresco. Its password comes from `OPENARCH_APP_ALFRESCO_PASSWORD`, `--alfresco-password-stdin` or a prompt |
 | `--default-secrets` | off | Keep the upstream secrets |
 | `--default-users` | off | Keep the upstream OpenArch users (`admin:password`) and `HXPR_PASSWORD` |
 | `--force` | off | Replace an existing context with the same name |
@@ -243,6 +246,17 @@ Upstream runs it with the `alfresco-external` profile: the Alfresco ingesters, `
 5. Make the broker reachable from the stack. For example, alfresco-docker-installer publishes no broker port.
 6. With Alfresco Search Community, mount `upstream/acs/search/reindex.prefixes-file.json` in the batch indexer and set `ALFRESCO_REINDEX_PREFIXES_FILE`, so the `cl` prefix is indexed.
 7. Restart Alfresco.
+
+### On Docker Compose
+
+`--alfresco-compose <dir>` instead of `--alfresco-env` is for an Alfresco that runs with Docker Compose. The plugin then makes the changes of the steps above itself, or shows them, and the user chooses:
+
+- `init` reads the project with `docker compose config`, so the files, `.env` and profiles count as for the user's own `docker compose up`. It finds the repository (an `alfresco-content-repository` image, or `-Ddb.url=` in `JAVA_OPTS`), the ActiveMQ broker and its login, the search indexer (Search Community or Solr) and ACA, and their versions. It refuses a project without a broker, with two repositories, or with Alfresco older than 25.
+- The two projects meet on the Docker network `openarch-app-alfresco`. The repository and the broker join it with the aliases `openarch-alfresco` and `openarch-activemq`, and the stack proxy with `openarch-app-proxy`. So the stack reaches them by name, and no port of the project is published. `up` creates the network when it is missing.
+- `alfresco-prepare` builds two images: the repository image of the project plus the module JAR (`openarch-app/<project>-<service>:module`), and ACA of the project's version with the extension, from the pinned `alfresco-content-lake-ui` commit (`openarch-app/aca-extension:<version>`). It writes `alfresco-compose.override.yaml` in the setup folder. That file replaces the image of the repository (with `build: !reset null`), adds the module properties to its full `JAVA_OPTS`, keeps the networks of each service and adds the shared one, mounts the prefixes file in a Search Community indexer, and replaces the image of ACA. The ACA image has its own nginx, which forwards `/alfresco/` to the repository and the App for OpenArch paths to the stack, so a proxy that sends `/` to ACA needs no change. That nginx resolves the stack proxy at startup, so the replaced ACA gets `restart: unless-stopped` and runs once the stack is up.
+- Without `--apply`, nothing in the project changes, and the command prints the steps. With `--apply`, it asks for confirmation (`--yes` when non-interactive), installs the file as the override file of the project (`docker-compose.override.yml` next to `docker-compose.yml`, `compose.override.yaml` next to `compose.yaml`), waits for the repository, the broker and the indexer, and then starts the rest. It refuses an override file that it did not write. A later run reads the project without its own file, so it starts from the user's files again.
+- To undo, remove the override file and run `docker compose up -d` in the project. Tested: the repository and ACA go back to the images of the project.
+- The file holds the broker password of the project, as the project's own files do, so it has mode 0600.
 
 ### What the plugin does
 

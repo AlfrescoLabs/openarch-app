@@ -9,7 +9,7 @@ The plugin wraps the upstream [content-lake-app-deployment](https://github.com/A
 
 ## Status
 
-In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `sync`, `alfresco-module`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
+In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `sync`, `alfresco-module`, `alfresco-prepare`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
 
 ## Install
 
@@ -110,7 +110,18 @@ openarch app alfresco-module ./alfresco-module   # the JAR and the steps for you
 openarch app up
 ```
 
-The file holds `ALFRESCO_URL` and `ALFRESCO_EVENT_BROKER_URL` as the containers reach them (for example `http://host.docker.internal:8180` and `tcp://host.docker.internal:61616`), an administrator login (`ALFRESCO_ADMIN_USER`, `ALFRESCO_ADMIN_PASSWORD`) and the broker login (`ACTIVEMQ_USER`, `ACTIVEMQ_PASSWORD`). It works with `--alfresco 1 --nuxeo 0`. `smoke-test` writes test users and folders into that Alfresco, so it needs `--yes` there. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
+For an Alfresco that runs with Docker Compose, `--alfresco-compose` points at its project folder instead, and the plugin prepares that Alfresco for you. `alfresco-prepare` builds the repository image of the project plus the module, and ACA of the project's version with the App for OpenArch extension. It writes an override file and shows the steps. With `--apply`, it installs that file in the project and recreates only the changed services:
+
+```sh
+OPENARCH_APP_ALFRESCO_PASSWORD=... openarch app init --alfresco-compose ~/alfresco
+openarch app alfresco-prepare            # shows the changes, changes nothing
+openarch app alfresco-prepare --apply    # makes them (back up Alfresco first)
+openarch app up
+```
+
+To undo, remove the override file from the project and run `docker compose up -d` there.
+
+With `--alfresco-env`, the file holds `ALFRESCO_URL` and `ALFRESCO_EVENT_BROKER_URL` as the containers reach them (for example `http://host.docker.internal:8180` and `tcp://host.docker.internal:61616`), an administrator login (`ALFRESCO_ADMIN_USER`, `ALFRESCO_ADMIN_PASSWORD`) and the broker login (`ACTIVEMQ_USER`, `ACTIVEMQ_PASSWORD`). It works with `--alfresco 1 --nuxeo 0`. `smoke-test` writes test users and folders into that Alfresco, so it needs `--yes` there. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
 After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:
 
