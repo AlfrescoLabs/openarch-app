@@ -17,6 +17,7 @@ import (
 	"unicode"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
+	"github.com/AlfrescoLabs/openarch-app/internal/stack"
 )
 
 // Keys of an --alfresco-env file: the ones of the upstream alfresco-external
@@ -144,7 +145,19 @@ func alfrescoModuleSteps(jar string) []string {
 		"Make the broker reachable from the stack, at ALFRESCO_EVENT_BROKER_URL of the --alfresco-env file.",
 		"With Alfresco Search Community (OpenSearch), mount upstream/acs/search/reindex.prefixes-file.json in its batch indexer and set ALFRESCO_REINDEX_PREFIXES_FILE=file:<path>.",
 		"Restart Alfresco.",
+		"Optional, for the App for OpenArch search and chat in ACA: rebuild your ACA with the extension of " + uiContext() +
+			" (its README, 'Install into ACA'), and send /api/rag/ and /api/content-lake/ of its proxy to the stack proxy.",
 	}
+}
+
+// uiContext is the pinned commit of the ACA extension, as a GitHub URL.
+func uiContext() string {
+	for _, g := range stack.GitContexts {
+		if g.Var == "CONTENT_LAKE_UI_GIT_CONTEXT" {
+			return strings.TrimSuffix(g.Repo, ".git") + "/tree/" + g.Ref
+		}
+	}
+	return "https://github.com/AlfrescoLabs/alfresco-content-lake-ui"
 }
 
 // ModuleResult is the outcome of AlfrescoModule.
