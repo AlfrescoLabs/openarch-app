@@ -74,7 +74,8 @@ func quote(s string) string {
 func renderProjectOverride(p AlfrescoProject, setupDir string) []byte {
 	var b strings.Builder
 	b.WriteString(OverrideHeader)
-	b.WriteString("# Remove this file and run 'docker compose up -d' to undo it. Nodes keep the cl: aspects.\n")
+	b.WriteString("# Undo it with 'openarch app alfresco-prepare --undo'. Do not only delete it: nodes with cl: aspects\n")
+	b.WriteString("# cannot be read once the module is gone.\n")
 	fmt.Fprintf(&b, "networks:\n  %s:\n    external: true\n", SharedNetwork)
 	b.WriteString("services:\n")
 	// The repository: the image of the project plus the module JAR, and the
@@ -343,7 +344,7 @@ func Prepare(ctx context.Context, env Env, s Setup, opts PrepareOptions, st Stre
 	for _, args := range [][]string{wait, {"compose", "up", "-d"}} {
 		if err := env.Stream(ctx, p.Dir, nil, st.Err, st.Err, "docker", args...); err != nil {
 			return res, output.NewError(output.ExitUnhealthy, "the Alfresco project did not start again: "+err.Error(),
-				"See 'docker compose logs' in "+p.Dir+". To undo, remove "+override+" and run 'docker compose up -d' there.")
+				"See 'docker compose logs' in "+p.Dir+". To undo, run 'openarch app alfresco-prepare --undo'.")
 		}
 	}
 	res.Applied = true
