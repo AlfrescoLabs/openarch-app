@@ -104,7 +104,7 @@ func (g GitContext) URL() string { return g.Repo + "#" + g.Ref }
 var GitContexts = []GitContext{
 	{"CONTENT_LAKE_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "fd220ce85c09749b88610dca6b3f6ce2605740b2"},
 	{"CONTENT_LAKE_ACS_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "fd220ce85c09749b88610dca6b3f6ce2605740b2"},
-	{"CONTENT_LAKE_UI_GIT_CONTEXT", "https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git", "1df264e4fad2c22c92f151684d3a23bb4c90c819"},
+	{"CONTENT_LAKE_UI_GIT_CONTEXT", "https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git", "e289a069a0078ed31247352118264eb2c4acd047"},
 	{"CONTENT_LAKE_APP_UI_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app-ui.git", "a6ddcbe1b68db6d7030e21a77844a8e848a7aed4"},
 }
 
