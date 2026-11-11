@@ -124,12 +124,19 @@ type UpResult struct {
 	// SourceIDs are the repository ids of the two Alfresco instances of the
 	// alfresco-2 extra, as rag-service uses them.
 	SourceIDs map[string]string `json:"sourceIds,omitempty"`
+	// ExternalAlfresco is the URL of the existing Alfresco that replaces the
+	// bundled one, or empty.
+	ExternalAlfresco string `json:"externalAlfresco,omitempty"`
 }
 
 // WriteText writes the human-readable form.
 func (r UpResult) WriteText(w io.Writer) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "App for OpenArch is up (%s).\n\n", r.Sources)
+	what := r.String()
+	if r.ExternalAlfresco != "" {
+		what = "the existing Alfresco " + r.ExternalAlfresco
+	}
+	fmt.Fprintf(&b, "App for OpenArch is up (%s).\n\n", what)
 	for _, e := range r.Endpoints {
 		fmt.Fprintf(&b, "%s\t%s\n", e.Name, e.URL)
 	}
@@ -206,7 +213,7 @@ func (s Setup) MissingModels(ctx context.Context, env Env) []string {
 
 // Up starts the stack. Compose writes its progress to st.Err.
 func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpResult, error) {
-	res := UpResult{Dir: s.Dir, Sources: s.Config.Sources}
+	res := UpResult{Dir: s.Dir, Sources: s.Config.Sources, ExternalAlfresco: s.Config.ExternalAlfresco}
 	if err := s.CheckNuxeo(); err != nil {
 		return res, err
 	}

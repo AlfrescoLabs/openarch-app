@@ -113,6 +113,10 @@ func TestInitExistingAlfresco(t *testing.T) {
 	if err := res.WriteText(&b); err != nil || !strings.Contains(b.String(), "(the existing Alfresco http://host.docker.internal:8180)") {
 		t.Errorf("text = %q", b.String())
 	}
+	var up strings.Builder
+	if err := (UpResult{Sources: c.Sources, ExternalAlfresco: c.ExternalAlfresco}).WriteText(&up); err != nil || !strings.HasPrefix(up.String(), "App for OpenArch is up (the existing Alfresco http://host.docker.internal:8180).") {
+		t.Errorf("up text = %q", up.String())
+	}
 	if (Setup{Dir: dir, Config: c}).UsesUpstreamAlfrescoAdmin() {
 		t.Error("existing Alfresco reported as using the upstream admin")
 	}
