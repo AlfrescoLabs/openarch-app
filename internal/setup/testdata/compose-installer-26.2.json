@@ -1,0 +1,401 @@
+{
+  "name": "stock",
+  "networks": {
+    "default": {
+      "name": "stock_default",
+      "ipam": {}
+    }
+  },
+  "services": {
+    "activemq": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "1073741824"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "ACTIVEMQ_ADMIN_LOGIN": "admin",
+        "ACTIVEMQ_ADMIN_PASSWORD": "test-secret"
+      },
+      "image": "alfresco/alfresco-activemq:6.2.6-jre17-rockylinux8",
+      "networks": {
+        "default": null
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "activemq-data",
+          "target": "/opt/activemq/data",
+          "volume": {}
+        }
+      ]
+    },
+    "alfresco": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "6777995264"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "JAVA_OPTS": " -Ddb.username=alfresco -Ddb.password=test-secret -Ddb.driver=org.postgresql.Driver -Ddb.url=jdbc:postgresql://postgres:5432/alfresco -Dalfresco_user_store.adminpassword=test-secret -Dsystem.preferred.password.encoding=bcrypt10 -Dsolr.secureComms=secret -Dsolr.sharedSecret=test-secret -Dindex.subsystem.name=elasticsearch -Delasticsearch.host=opensearch -Delasticsearch.port=9200 -Delasticsearch.createIndexIfNotExists=true -Dalfresco.host=localhost -Dalfresco.port=8180 -Dapi-explorer.url=http://localhost:8180/api-explorer -Dalfresco.protocol=http -Dshare.host=localhost -Dshare.port=8180 -Dshare.protocol=http -Daos.baseUrlOverwrite=http://localhost/alfresco/aos -Dmessaging.broker.url=\"failover:(nio://activemq:61616)?timeout=3000&jms.useCompression=true\" -Dmessaging.broker.username=admin -Dmessaging.broker.password=test-secret -Ddeployment.method=DOCKER_COMPOSE -Dcsrf.filter.enabled=false -Dopencmis.server.override=true -Dopencmis.server.value=http://localhost:8180 -DlocalTransform.core-aio.url=http://transform-core-aio:8090/ -Dhttpclient.config.transform.connectionRequestTimeout=500000 -Dcsrf.filter.enabled=false -Dalfresco.restApi.basicAuthScheme=true -Dauthentication.protection.enabled=false -XX:+UseG1GC -XX:+UseStringDeduplication -Dgoogledocs.enabled=false -Ddev.email.not.sent=true -XX:MinRAMPercentage=50 -XX:MaxRAMPercentage=80 ",
+        "JAVA_TOOL_OPTIONS": " -Dencryption.keystore.type=JCEKS -Dencryption.cipherAlgorithm=DESede/CBC/PKCS5Padding -Dencryption.keyAlgorithm=DESede -Dencryption.keystore.location=/usr/local/tomcat/shared/classes/alfresco/extension/keystore/keystore -Dmetadata-keystore.password=test-secret -Dmetadata-keystore.aliases=metadata -Dmetadata-keystore.metadata.password=test-secret -Dmetadata-keystore.metadata.algorithm=DESede "
+      },
+      "networks": {
+        "default": null
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "alf-repo-data",
+          "target": "/usr/local/tomcat/alf_data",
+          "volume": {}
+        },
+        {
+          "type": "volume",
+          "source": "alf-repo-logs",
+          "target": "/usr/local/tomcat/logs",
+          "volume": {}
+        }
+      ],
+      "build": {
+        "context": "/home/user/alfresco/alfresco",
+        "dockerfile": "Dockerfile",
+        "args": {
+          "ALFRESCO_TAG": "26.2.0",
+          "DB": "postgres"
+        }
+      },
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8080/alfresco/api/-default-/public/alfresco/versions/1/probes/-ready-"
+        ],
+        "timeout": "3s",
+        "interval": "30s",
+        "retries": 3,
+        "start_period": "1m0s"
+      }
+    },
+    "batch-indexer": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "1073741824"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "ALFRESCO_ACCEPTEDCONTENTMEDIATYPESCACHE_BASEURL": "http://transform-core-aio:8090/transform/config",
+        "ALFRESCO_ACS_URL": "http://alfresco:8080",
+        "ALFRESCO_CONTENT_TRANSFORM_SHAREDSECRET": "test-secret",
+        "ALFRESCO_REINDEX_CONTINUOUS_CATCHUPPOLLINGINTERVAL": "1s",
+        "ALFRESCO_REINDEX_CONTINUOUS_MAXWINDOW": "30m",
+        "ALFRESCO_REINDEX_CONTINUOUS_OVERLAP": "10m",
+        "ALFRESCO_REINDEX_CONTINUOUS_POLLINGINTERVAL": "15s",
+        "SPRING_DATASOURCE_PASSWORD": "test-secret",
+        "SPRING_DATASOURCE_URL": "jdbc:postgresql://postgres:5432/alfresco",
+        "SPRING_DATASOURCE_USERNAME": "alfresco",
+        "SPRING_ELASTICSEARCH_REST_URIS": "http://opensearch:9200"
+      },
+      "image": "docker.io/alfresco/alfresco-elasticsearch-batch-indexing:5.7.0",
+      "networks": {
+        "default": null
+      },
+      "depends_on": {
+        "alfresco": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "opensearch": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "transform-core-aio": {
+          "condition": "service_started",
+          "required": true
+        }
+      }
+    },
+    "content-app": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "268435456"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "APP_BASE_SHARE_URL": "http://localhost:8180/#/preview/s",
+        "APP_CONFIG_PLUGIN_PROCESS_SERVICE": "false"
+      },
+      "image": "alfresco/alfresco-content-app:8.0.0",
+      "networks": {
+        "default": null
+      },
+      "depends_on": {
+        "alfresco": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      }
+    },
+    "opensearch": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "1073741824"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "DISABLE_SECURITY_PLUGIN": "true",
+        "discovery.type": "single-node"
+      },
+      "image": "opensearchproject/opensearch:2",
+      "networks": {
+        "default": null
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "opensearch-data",
+          "target": "/usr/share/opensearch/data",
+          "volume": {}
+        }
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "curl -sf http://localhost:9200/_cluster/health || exit 1"
+        ],
+        "timeout": "10s",
+        "interval": "30s",
+        "retries": 5,
+        "start_period": "1m0s"
+      }
+    },
+    "postgres": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "1694498816"
+          }
+        },
+        "placement": {}
+      },
+      "command": [
+        "postgres",
+        "-c",
+        "max_connections=200",
+        "-c",
+        "logging_collector=on",
+        "-c",
+        "log_min_messages=LOG",
+        "-c",
+        "log_directory=/var/log/postgresql"
+      ],
+      "entrypoint": null,
+      "environment": {
+        "PGUSER": "alfresco",
+        "POSTGRES_DB": "alfresco",
+        "POSTGRES_PASSWORD": "test-secret",
+        "POSTGRES_USER": "alfresco"
+      },
+      "image": "postgres:17.9",
+      "networks": {
+        "default": null
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "postgres-data",
+          "target": "/var/lib/postgresql/data",
+          "volume": {}
+        },
+        {
+          "type": "volume",
+          "source": "postgres-logs",
+          "target": "/var/log/postgresql",
+          "volume": {}
+        }
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready"
+        ],
+        "timeout": "5s",
+        "interval": "10s",
+        "retries": 5
+      }
+    },
+    "proxy": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "134217728"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "image": "nginx:stable-alpine",
+      "networks": {
+        "default": null
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/home/user/alfresco/config/nginx.conf",
+          "target": "/etc/nginx/nginx.conf",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/home/user/alfresco/config/nginx.htpasswd",
+          "target": "/etc/nginx/conf.d/nginx.htpasswd",
+          "bind": {}
+        }
+      ],
+      "depends_on": {
+        "alfresco": {
+          "condition": "service_started",
+          "required": true
+        },
+        "content-app": {
+          "condition": "service_started",
+          "required": true
+        },
+        "share": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 8180,
+          "published": "8180",
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "share": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "1694498816"
+          }
+        },
+        "placement": {}
+      },
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "CSRF_FILTER_ORIGIN": "http://localhost:8180",
+        "CSRF_FILTER_REFERER": "http://localhost:8180/.*",
+        "JAVA_OPTS": " -Dalfresco.context=alfresco -Dalfresco.protocol=http -XX:MinRAMPercentage=50 -XX:MaxRAMPercentage=80 ",
+        "REPO_HOST": "alfresco",
+        "REPO_PORT": "8080"
+      },
+      "networks": {
+        "default": null
+      },
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "alf-share-logs",
+          "target": "/usr/local/tomcat/logs",
+          "volume": {}
+        }
+      ],
+      "build": {
+        "context": "/home/user/alfresco/share",
+        "dockerfile": "Dockerfile",
+        "args": {
+          "HTTP_PORT": "8180",
+          "SERVER_NAME": "localhost",
+          "SHARE_TAG": "26.2.1"
+        }
+      },
+      "depends_on": {
+        "alfresco": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      }
+    },
+    "transform-core-aio": {
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "2147483648"
+          }
+        },
+        "placement": {}
+      },
+      "restart": "on-failure",
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "JAVA_OPTS": " -XX:MinRAMPercentage=50 -XX:MaxRAMPercentage=80 -Dserver.tomcat.threads.max=12 -Dserver.tomcat.threads.min=4 -Dlogging.level.org.alfresco.transform.common.TransformerDebug=ERROR -Dlogging.level.org.alfresco.transform=ERROR -Dlogging.level.org.apache.fontbox.ttf=ERROR -Dlogging.level.org.apache.pdfbox.cos.COSDocument=ERROR -Dlogging.level.org.apache.pdfbox.pdfparser=ERROR -Dlogging.level.org.apache.pdfbox.filter.FlateFilter=ERROR -Dlogging.level.org.apache.pdfbox.pdmodel.font=ERROR -Dlogging.level.org.apache.pdfbox.pdmodel.font.PDSimpleFont=FATAL -Dlogging.level.org.apache.pdfbox.pdmodel.font.PDFont=FATAL -Dlogging.level.org.apache.pdfbox.pdmodel.font.PDCIDFont=FATAL "
+      },
+      "image": "alfresco/alfresco-transform-core-aio:5.4.3",
+      "networks": {
+        "default": null
+      }
+    }
+  },
+  "volumes": {
+    "activemq-data": {
+      "name": "stock_activemq-data"
+    },
+    "alf-repo-data": {
+      "name": "stock_alf-repo-data"
+    },
+    "alf-repo-logs": {
+      "name": "stock_alf-repo-logs"
+    },
+    "alf-share-logs": {
+      "name": "stock_alf-share-logs"
+    },
+    "opensearch-data": {
+      "name": "stock_opensearch-data"
+    },
+    "postgres-data": {
+      "name": "stock_postgres-data"
+    },
+    "postgres-logs": {
+      "name": "stock_postgres-logs"
+    }
+  }
+}
