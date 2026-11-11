@@ -119,7 +119,7 @@ openarch app alfresco-prepare --apply    # makes them (back up Alfresco first)
 openarch app up
 ```
 
-To undo, remove the override file from the project and run `docker compose up -d` there.
+To undo, run `openarch app alfresco-prepare --undo`. Do not only delete the override file: once the module is gone, Alfresco cannot read or update a node that still has a `cl:` aspect. `--undo` removes those aspects first.
 
 With `--alfresco-env`, the file holds `ALFRESCO_URL` and `ALFRESCO_EVENT_BROKER_URL` as the containers reach them (for example `http://host.docker.internal:8180` and `tcp://host.docker.internal:61616`), an administrator login (`ALFRESCO_ADMIN_USER`, `ALFRESCO_ADMIN_PASSWORD`) and the broker login (`ACTIVEMQ_USER`, `ACTIVEMQ_PASSWORD`). It works with `--alfresco 1 --nuxeo 0`. `smoke-test` writes test users and folders into that Alfresco, so it needs `--yes` there. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
