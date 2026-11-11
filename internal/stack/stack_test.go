@@ -42,17 +42,18 @@ func TestSources(t *testing.T) {
 
 func TestHostPorts(t *testing.T) {
 	for _, c := range []struct {
-		profile  string
-		extras   []string
-		sampleUI bool
-		want     string
+		profile              string
+		extras               []string
+		sampleUI, filesystem bool
+		want                 string
 	}{
-		{"alfresco", nil, false, "[80 443 8090]"},
-		{"full", []string{"alfresco-2"}, false, "[80 443 8090 8081 8082 8445]"},
-		{"alfresco", nil, true, "[80 443 8090 4200]"},
+		{"alfresco", nil, false, false, "[80 443 8090]"},
+		{"full", []string{"alfresco-2"}, false, false, "[80 443 8090 8081 8082 8445]"},
+		{"alfresco", nil, true, false, "[80 443 8090 4200]"},
+		{"nuxeo", nil, false, true, "[80 443 8090 8081 9096]"},
 	} {
-		if got := fmt.Sprint(HostPorts(c.profile, c.extras, c.sampleUI)); got != c.want {
-			t.Errorf("HostPorts(%s, %v, %v) = %s, want %s", c.profile, c.extras, c.sampleUI, got, c.want)
+		if got := fmt.Sprint(HostPorts(c.profile, c.extras, c.sampleUI, c.filesystem)); got != c.want {
+			t.Errorf("HostPorts(%s, %v, %v, %v) = %s, want %s", c.profile, c.extras, c.sampleUI, c.filesystem, got, c.want)
 		}
 	}
 }

@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
@@ -28,11 +30,13 @@ type Env struct {
 	// copies its output to stdout and stderr while it runs.
 	Stream   func(ctx context.Context, dir string, extraEnv []string, stdout, stderr io.Writer, name string, args ...string) error
 	LookPath func(file string) (string, error)
+	// HTTP calls the APIs of the running stack.
+	HTTP *http.Client
 }
 
 // SystemEnv returns an Env backed by the real system.
 func SystemEnv() Env {
-	return Env{Run: runCommand, Stream: streamCommand, LookPath: exec.LookPath}
+	return Env{Run: runCommand, Stream: streamCommand, LookPath: exec.LookPath, HTTP: &http.Client{Timeout: 30 * time.Second}}
 }
 
 func streamCommand(ctx context.Context, dir string, extraEnv []string, stdout, stderr io.Writer, name string, args ...string) error {
@@ -79,6 +83,10 @@ type InitOptions struct {
 	// shows, one for each instance. They need two instances: upstream names
 	// only a list of sources. Empty means DefaultAlfrescoNames.
 	AlfrescoNames []string
+	// FilesystemReaders are the users who can read the files of the
+	// filesystem source. FilesystemEveryone lets every user read them.
+	FilesystemReaders  []string
+	FilesystemEveryone bool
 }
 
 // DefaultAlfrescoNames are the names of the two Alfresco sources when init
@@ -127,6 +135,9 @@ type InitResult struct {
 func (r InitResult) WriteText(w io.Writer) error {
 	var b strings.Builder
 	what := r.Config.String()
+	if r.Config.Filesystem != "" {
+		what += ", the folder " + r.Config.Filesystem
+	}
 	if r.Config.SampleUI {
 		what += ", sample UI"
 	}
@@ -157,6 +168,10 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 		return InitResult{}, err
 	}
 	names, err := alfrescoNames(c, opts.AlfrescoNames)
+	if err != nil {
+		return InitResult{}, err
+	}
+	readers, err := filesystemSource(&c, opts.FilesystemReaders, opts.FilesystemEveryone)
 	if err != nil {
 		return InitResult{}, err
 	}
@@ -202,12 +217,15 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 		}
 	}
 
-	merged, reused, err := writeEnv(dir, &c, names)
+	merged, reused, err := writeEnv(dir, &c, names, readers)
 	if err != nil {
 		return res, err
 	}
 	if reused {
 		res.Reused = append(res.Reused, EnvFile)
+	}
+	if c.Filesystem != "" && merged[syncPasswordKey] == "" {
+		return res, output.Usage(fmt.Sprintf("the existing %s has no settings for the filesystem source", EnvFile), "Run init again without --filesystem, or in a new folder.")
 	}
 	user, password := merged[adminUserKey], merged[adminPasswordKey]
 	if user == "" || password == "" {
@@ -251,7 +269,11 @@ func nextSteps(c Config, dir string) []string {
 	if c.ManagedNuxeo {
 		up += "   (the first start builds Nuxeo from source, which takes long)"
 	}
-	return []string{"openarch app models pull" + flag, up}
+	steps := []string{"openarch app models pull" + flag, up}
+	if c.Filesystem != "" {
+		steps = append(steps, "openarch app sync"+flag+"   (reads the folder; run it again after a change)")
+	}
+	return steps
 }
 
 // pinnedRepo is a Git repository that a setup holds at a pinned commit, in a
@@ -321,13 +343,13 @@ func fetchPinned(ctx context.Context, env Env, dir string, r pinnedRepo, cmd str
 // writeEnv writes .env.local, or keeps an existing one, and returns the
 // upstream .env values with the .env.local values on top. An existing file
 // sets the bind IP in c, so the config matches what Compose will use.
-func writeEnv(dir string, c *Config, names []string) (map[string]string, bool, error) {
+func writeEnv(dir string, c *Config, names, readers []string) (map[string]string, bool, error) {
 	path := filepath.Join(dir, EnvFile)
 	local, err := os.ReadFile(path)
 	reused := err == nil
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		values, err := envValues(*c, names)
+		values, err := envValues(*c, names, readers)
 		if err != nil {
 			return nil, false, err
 		}

@@ -218,25 +218,29 @@ func TestComposeVersion(t *testing.T) {
 
 func TestMemoryByProfile(t *testing.T) {
 	cases := []struct {
-		profile string
-		extras  []string
-		mem     int64
-		want    Status
+		profile    string
+		extras     []string
+		filesystem bool
+		mem        int64
+		want       Status
 	}{
-		{"alfresco", nil, 12 * gib, OK},
-		{"alfresco", nil, 10 * gib, Warn},
-		{"alfresco", nil, 6 * gib, Fail},
-		{"nuxeo", nil, 8 * gib, OK},
-		{"full", nil, 12 * gib, Warn},
-		{"full", nil, 8 * gib, Fail},
-		{"alfresco", []string{"alfresco-2"}, 18 * gib, Warn},
-		{"alfresco", []string{"alfresco-2"}, 14 * gib, Fail},
-		{"alfresco", []string{"alfresco-2"}, 22 * gib, OK},
+		{"alfresco", nil, false, 12 * gib, OK},
+		{"alfresco", nil, false, 10 * gib, Warn},
+		{"alfresco", nil, false, 6 * gib, Fail},
+		{"nuxeo", nil, false, 8 * gib, OK},
+		{"full", nil, false, 12 * gib, Warn},
+		{"full", nil, false, 8 * gib, Fail},
+		{"alfresco", []string{"alfresco-2"}, false, 18 * gib, Warn},
+		{"alfresco", []string{"alfresco-2"}, false, 14 * gib, Fail},
+		{"alfresco", []string{"alfresco-2"}, false, 22 * gib, OK},
+		{"alfresco", nil, true, 12 * gib, Warn},
+		{"alfresco", nil, true, 14 * gib, OK},
 	}
 	for _, c := range cases {
 		f := newFake()
 		f.infoJSON = info(c.mem)
 		o := opts()
+		o.Filesystem = c.filesystem
 		var err error
 		if o.Sources, err = stack.SourcesOf(c.profile, c.extras); err != nil {
 			t.Fatal(err)

@@ -53,6 +53,9 @@ type Config struct {
 	// SampleUI runs the upstream sample UI, which the proxy serves at /. It is
 	// optional, so a file without it keeps schemaVersion 2.
 	SampleUI bool `yaml:"sampleUI,omitempty" json:"sampleUI,omitempty"`
+	// Filesystem is the absolute path of the folder that the filesystem source
+	// reads, or empty for no filesystem source. It is optional too.
+	Filesystem string `yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
 	// BuiltContexts maps each build context variable, and "upstream", to the
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`

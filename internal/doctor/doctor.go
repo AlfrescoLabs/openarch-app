@@ -53,7 +53,9 @@ func (r Report) Failed() bool { return r.Summary.Fail > 0 }
 type Options struct {
 	// Sources are the Alfresco and Nuxeo instances. They set the memory
 	// threshold and whether the nuxeo-deployment check runs.
-	Sources        stack.Sources
+	Sources stack.Sources
+	// Filesystem adds the filesystem source to the memory threshold.
+	Filesystem     bool
 	LLMModel       string
 	EmbeddingModel string
 	// ModelURL is Docker Model Runner as seen from the host.

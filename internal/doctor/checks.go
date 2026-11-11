@@ -37,6 +37,10 @@ var profileMemory = map[string]memory{
 // of both instances to 13.5 GB in total.
 var alfresco2Memory = memory{8 * gib, 10 * gib}
 
+// filesystemMemory is added for the filesystem source: plugin-batch-ingester,
+// one more JVM.
+var filesystemMemory = memory{1 * gib, 2 * gib}
+
 const installDockerFix = "Install Docker Desktop: https://docs.docker.com/get-started/get-docker/"
 
 type dockerInfo struct {
@@ -186,6 +190,10 @@ func checkMemory(ctx context.Context, s *state) Result {
 	if s.opts.Sources.Alfresco >= 2 {
 		need.min += alfresco2Memory.min
 		need.recommended += alfresco2Memory.recommended
+	}
+	if s.opts.Filesystem {
+		need.min += filesystemMemory.min
+		need.recommended += filesystemMemory.recommended
 	}
 	mem := fmt.Sprintf("%.1f GiB available to Docker", float64(info.MemTotal)/gib)
 	fix := fmt.Sprintf("Give Docker at least %d GiB of memory (Docker Desktop: Settings > Resources), or use fewer sources.", need.recommended/gib)

@@ -64,7 +64,7 @@ func TestParseEnv(t *testing.T) {
 
 func TestEnvValues(t *testing.T) {
 	c := Config{BindIP: "127.0.0.1", LLMModel: "m", EmbeddingModel: "e"}
-	v, err := envValues(c, nil)
+	v, err := envValues(c, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestEnvValues(t *testing.T) {
 		t.Error("NGINX_ROOT_DIRECTIVE set without the sample UI")
 	}
 	c.SampleUI = true
-	if v, err = envValues(c, []string{"Branch office", "Head $office"}); err != nil {
+	if v, err = envValues(c, []string{"Branch office", "Head $office"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	// The quotes keep Compose from expanding $demo_ui_upstream.
@@ -109,7 +109,7 @@ func TestEnvValues(t *testing.T) {
 	c.SampleUI = false
 
 	c.DefaultSecrets, c.DefaultUsers = true, true
-	v, err = envValues(c, nil)
+	v, err = envValues(c, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

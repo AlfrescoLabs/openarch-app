@@ -9,7 +9,7 @@ The plugin wraps the upstream [content-lake-app-deployment](https://github.com/A
 
 ## Status
 
-In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
+In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `sync`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
 
 ## Install
 
@@ -75,7 +75,17 @@ openarch app init --alfresco 2 --sample-ui --alfresco-name "Branch" --alfresco-n
 
 With two Alfresco instances, `--alfresco-name` gives each one the name that the sample UI shows (default: `Alfresco 1` and `Alfresco 2`).
 
-`doctor` takes the same flags. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
+`--filesystem` adds a folder of this machine as a source. The stack mounts it read-only. `--filesystem-reader` names a user who can read its files, once for each user, and `--filesystem-everyone` lets every user read them. A user logs in to Alfresco or Nuxeo, and the same user name counts for the files. Groups do not work for this source. Nothing syncs by itself: `sync` reads the folder, so run it again after the files change:
+
+```sh
+openarch app init --filesystem ~/Documents/shared --filesystem-reader jim --filesystem-reader dwight
+openarch app up
+openarch app sync
+```
+
+`--filesystem` does not work with `--alfresco 2 --sample-ui`, because that sample UI does not find the files.
+
+`doctor` takes the same flags, and `--filesystem` there has no folder: it adds the port and memory of the filesystem source. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
 After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:
 

@@ -20,7 +20,7 @@ Not in the first version:
 
 - Choosing another upstream commit (`--ref`). A setup moves only to the commit of a newer release (see Upgrades).
 - HTTPS. Every port binds to `127.0.0.1` by default.
-- The other upstream profiles and extras: `demo`, `platform`, `debug`, `observability`, `connector`, `sharepoint-mock`, `transform-extras`.
+- The other upstream profiles and extras: `demo`, `debug`, `observability`, `sharepoint-mock`, `transform-extras`. The plugin uses `platform` only for the sample UI and `connector` only for the filesystem source.
 - More than two Alfresco instances or more than one Nuxeo.
 - An Alfresco that the user already runs, instead of the bundled one.
 - Admin commands for a running stack (connectors, sources, RAG questions, reindex).
@@ -58,7 +58,7 @@ openarch-app/
   nuxeo-deployment/       # nuxeo-deployment at its pinned commit, only with Nuxeo
 ```
 
-- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), and the commits of the last build. It holds no secrets.
+- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), and the commits of the last build. It holds no secrets.
 - `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
@@ -75,7 +75,7 @@ docker compose -p openarch-app --project-directory upstream \
 
 - `-p openarch-app` replaces the fixed upstream name `content-lake-app`. There is one setup per machine.
 - `.env.local` comes after the upstream `.env`, so its values win.
-- The upstream profile and extras follow from the sources (see Sources). The second Alfresco adds `-f upstream/compose.alfresco-2.yaml` and `--profile alfresco-2`, a managed Nuxeo adds `-f upstream/compose.nuxeo-deployment.yaml`, and the sample UI adds `--profile platform` (see Sample UI).
+- The upstream profile and extras follow from the sources (see Sources). The second Alfresco adds `-f upstream/compose.alfresco-2.yaml` and `--profile alfresco-2`, a managed Nuxeo adds `-f upstream/compose.nuxeo-deployment.yaml`, the filesystem source adds `--profile connector` (see Filesystem source), and the sample UI adds `--profile platform` (see Sample UI).
 - Compose resolves relative paths in every file against the project directory, `upstream/`. So `compose.override.yaml` refers to its neighbors with `../` paths, for example `../openarch-users.yml`.
 - Hyland OpenArch keeps its blobs, the embeddings included, in `/deployments/nxserver/data`, and upstream gives that folder no volume. A recreated container would lose them while MongoDB and OpenSearch keep the metadata, and the next permission change would then delete the embeddings. So `compose.override.yaml` adds the volume `hxpr-data`, and a one-shot service `hxpr-data-init` gives it to the OpenArch user (uid 33010) before OpenArch starts: OpenArch cannot write to a volume owned by root.
 
@@ -144,12 +144,13 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 | Command | Built | What it does |
 | --- | --- | --- |
 | `version` | yes | Prints the version. |
-| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the sources, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 with Nuxeo; 8082 and 8445 with a second Alfresco; 4200 with `--sample-ui`), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
+| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the sources, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 with Nuxeo; 8082 and 8445 with a second Alfresco; 4200 with `--sample-ui`; 9096 with `--filesystem`, which also adds memory), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
 | `init [dir]` | yes | Creates the setup folder, fetches upstream (and nuxeo-deployment with Nuxeo), writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the next commands: `models pull` and `up`. |
 | `up`, `down`, `status`, `logs` | yes | Run `docker compose up -d --wait`, `down`, `ps` and `logs` with the upstream profile and extras of the sources in `openarch-app.yaml`. `up` warns when a model is missing, fails early when nuxeo-deployment is missing, and prints the endpoints. `down` keeps the volumes. `status` exits with code 4 when a service is not healthy. In JSON mode `logs` returns the logs as one field and does not follow them. |
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
 | `upgrade` | yes | Moves the setup to the upstream commit and build contexts of the binary (see Upgrades). |
 | `smoke-test` | yes | Runs the upstream suite of the sources against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/test-rag-full.sh` for `full` (it covers both sources). These are the suites of the upstream `test/run-tests.sh`; `test/smoke-test.sh` is a check for a demo host and wants the demo UI at `/`. It runs from the setup folder, never from `upstream/`. |
+| `sync` | yes | Starts a sync of the filesystem source and waits for the job (see Filesystem source). Exit code 4 means the job failed, a file failed, or the job still runs after `--timeout`. |
 
 Flags of `init`:
 
@@ -163,6 +164,9 @@ Flags of `init`:
 | `--context-name` | `app` | Name of the `openarch` context |
 | `--sample-ui` | off | Add the upstream sample UI, served by the proxy at `/` (see Sample UI) |
 | `--alfresco-name` | `Alfresco 1`, `Alfresco 2` | Name of each Alfresco source in the sample UI, repeatable, in instance order. Needs `--alfresco 2` |
+| `--filesystem` | none | Folder of this machine to add as a source (see Filesystem source) |
+| `--filesystem-reader` | none | User who can read the files of `--filesystem`, repeatable |
+| `--filesystem-everyone` | off | Every user can read the files of `--filesystem` |
 | `--default-secrets` | off | Keep the upstream secrets |
 | `--default-users` | off | Keep the upstream OpenArch users (`admin:password`) and `HXPR_PASSWORD` |
 | `--force` | off | Replace an existing context with the same name |
@@ -191,6 +195,24 @@ Upstream runs the sample UI in the `demo` and `platform` profiles. `demo` is `fu
 With two Alfresco instances, `rag-service` lists the sources by name. `init` writes `ALFRESCO_1_DISPLAY_NAME` and `ALFRESCO_2_DISPLAY_NAME` to `.env.local`, from `--alfresco-name` or the defaults `Alfresco 1` and `Alfresco 2`, in single quotes. A name has 1 to 60 characters and no single quote. With one Alfresco, upstream has one source of each type and names them `Alfresco` and `Nuxeo`, so `--alfresco-name` is refused there.
 
 `sampleUI` is an optional field of `openarch-app.yaml`, so `schemaVersion` stays 2. A file without it is the same as before; a file with it cannot be read by 0.3.0, which refuses unknown fields. The choice is made at `init` only.
+
+## Filesystem source
+
+`--filesystem <folder>` on `init` adds a folder of this machine as a source. Upstream reads it with its shipped filesystem connector, which runs in `plugin-batch-ingester` in the `connector` profile. The one-shot `connector-init` copies the connector jar, built from the pinned `content-lake-app` commit, into a volume before the ingester starts. So the plugin adds `--profile connector` to every Compose call and writes these keys to `.env.local`:
+
+| Key | Value |
+| --- | --- |
+| `CONNECTOR_SOURCE_TYPE` | `filesystem` |
+| `CONNECTOR_HOST_PATH` | the absolute folder path, in single quotes. Upstream mounts it read-only. |
+| `FILESYSTEM_READ_PRINCIPALS` | the readers, comma separated, or empty for everyone |
+| `CONNECTOR_SYNC_USERNAME`, `CONNECTOR_SYNC_PASSWORD` | `sync` and a random password, also with `--default-secrets`, because upstream has no default |
+| `CONNECTOR_PORT` | `<bind IP>:9096`, so the sync API follows `BIND_IP` |
+
+- The connector gives every file the readers of `FILESYSTEM_READ_PRINCIPALS`, and an empty list means everyone. So `init` needs `--filesystem-reader` or `--filesystem-everyone`, and an empty list is never a default.
+- A reader is a user name. The RAG service takes the user name of the Alfresco or Nuxeo login for the filesystem source, but it looks up no groups there, so a group would match nobody. `init` refuses a reader that starts with `GROUP_`.
+- With two Alfresco instances, the sample UI sends one login for each Alfresco source and none for the filesystem source, so the RAG service finds no files for it. `init` refuses `--filesystem` with `--alfresco 2 --sample-ui`.
+- The ingester has no schedule. A sync runs only when its API is called (`POST /api/sync/configured` on port 9096, with the sync account). `openarch app sync` makes that call, then reads `GET /api/sync/status/<job>` until the job ends, and prints the counts. `up` does not sync.
+- `filesystem` is an optional field of `openarch-app.yaml`, like `sampleUI`, so `schemaVersion` stays 2. The folder and the readers are chosen at `init` only. One setup has at most one filesystem source.
 
 ## Limits
 

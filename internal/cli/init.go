@@ -45,7 +45,16 @@ fetches nuxeo-deployment, and Nuxeo runs in the same stack.
 --sample-ui adds the upstream sample UI, which asks questions across every
 source of the setup. The proxy serves it at /, and its container listens on
 port 4200 too. With two Alfresco instances, --alfresco-name names them, once
-for each instance (default: "Alfresco 1" and "Alfresco 2").`,
+for each instance (default: "Alfresco 1" and "Alfresco 2").
+
+--filesystem adds a folder of this machine as a source. The stack mounts it
+read-only, and 'openarch app sync' reads it. --filesystem-reader names a user
+who can read its files, once for each user; a user logs in to Alfresco or
+Nuxeo, and the same user name counts for the files. Groups do not work for
+this source. --filesystem-everyone lets every user read the files instead.
+The sync API listens on port 9096 with a random account in .env.local.
+--filesystem does not work with --alfresco 2 --sample-ui: that sample UI does
+not find the files.`,
 		Example: `  openarch app init                            # one Alfresco
   openarch app init --alfresco 2               # two Alfresco instances
   openarch app init --alfresco 1 --nuxeo 1     # one Alfresco and one Nuxeo
@@ -53,6 +62,8 @@ for each instance (default: "Alfresco 1" and "Alfresco 2").`,
   openarch app init --alfresco 2 --sample-ui   # two Alfresco and the sample UI
   openarch app init --alfresco 2 --sample-ui \
     --alfresco-name "Northgate Branch" --alfresco-name "Northgate Head Office"
+  openarch app init --filesystem ~/Documents/shared \
+    --filesystem-reader jim --filesystem-reader dwight
   openarch app init ./my-app --llm-model ai/qwen2.5 --output json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -85,6 +96,9 @@ for each instance (default: "Alfresco 1" and "Alfresco 2").`,
 	f.StringVar(&s.Context, "context-name", s.Context, "name of the openarch context for the bundled Hyland OpenArch")
 	f.BoolVar(&s.SampleUI, "sample-ui", false, "add the sample UI, served by the proxy at /")
 	f.StringArrayVar(&opts.AlfrescoNames, "alfresco-name", nil, "name of an Alfresco source in the sample UI (repeatable, in instance order; needs --alfresco 2)")
+	f.StringVar(&s.Filesystem, "filesystem", "", "folder of this machine to add as a source, mounted read-only")
+	f.StringArrayVar(&opts.FilesystemReaders, "filesystem-reader", nil, "user who can read the files of --filesystem (repeatable)")
+	f.BoolVar(&opts.FilesystemEveryone, "filesystem-everyone", false, "let every user read the files of --filesystem")
 	f.BoolVar(&s.DefaultSecrets, "default-secrets", false, "keep the upstream secrets instead of random ones")
 	f.BoolVar(&s.DefaultUsers, "default-users", false, "keep the upstream OpenArch users (admin:password)")
 	f.BoolVar(&opts.Force, "force", false, "replace an openarch context with the same name")

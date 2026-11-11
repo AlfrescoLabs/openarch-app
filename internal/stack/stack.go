@@ -54,6 +54,12 @@ const (
 	// upstream nginx template sets $demo_ui_upstream and resolves it on each
 	// request, so the proxy starts before the UI does.
 	SampleUIRoot = "proxy_pass http://$demo_ui_upstream;"
+	// ConnectorProfile is the upstream profile that runs plugin-batch-ingester
+	// with a connector jar, here the shipped filesystem connector.
+	ConnectorProfile = "connector"
+	// ConnectorPort publishes plugin-batch-ingester (CONNECTOR_PORT). Its sync
+	// API is the only way to start a sync: the proxy does not route to it.
+	ConnectorPort = 9096
 )
 
 // The upstream repository and the commit that every setup uses.
@@ -202,9 +208,10 @@ func ValidProfile(p string) error {
 }
 
 // HostPorts returns the host ports that a setup with profile and extras, and
-// with or without the sample UI, publishes. Every profile publishes the same
-// base ports, and the Nuxeo profiles publish Nuxeo too.
-func HostPorts(profile string, extras []string, sampleUI bool) []int {
+// with or without the sample UI and the filesystem source, publishes. Every
+// profile publishes the same base ports, and the Nuxeo profiles publish Nuxeo
+// too.
+func HostPorts(profile string, extras []string, sampleUI, filesystem bool) []int {
 	ports := []int{ProxyPort, ProxyHTTPSPort, OpenArchPort}
 	if NeedsNuxeo(profile) {
 		ports = append(ports, NuxeoPort)
@@ -214,6 +221,9 @@ func HostPorts(profile string, extras []string, sampleUI bool) []int {
 	}
 	if sampleUI {
 		ports = append(ports, SampleUIPort)
+	}
+	if filesystem {
+		ports = append(ports, ConnectorPort)
 	}
 	return ports
 }

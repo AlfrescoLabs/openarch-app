@@ -25,6 +25,23 @@ stderr '--alfresco-name needs --alfresco 2'
 stderr '--alfresco-name given 1 times, want 2'
 ! exists openarch-app
 
+# --filesystem needs readers, user names only, and an existing folder.
+mkdir shared
+! exec openarch-app init --filesystem shared
+stderr '--filesystem needs --filesystem-reader or --filesystem-everyone'
+! exec openarch-app init --filesystem shared --filesystem-reader GROUP_Sales
+stderr '--filesystem-reader GROUP_Sales is a group'
+stderr 'Name each user instead'
+! exec openarch-app init --filesystem shared --filesystem-reader jim --filesystem-everyone
+stderr 'cannot be combined'
+! exec openarch-app init --filesystem-reader jim
+stderr 'need --filesystem'
+! exec openarch-app init --filesystem missing --filesystem-everyone
+stderr '--filesystem missing is not a folder'
+! exec openarch-app init --alfresco 2 --sample-ui --filesystem shared --filesystem-reader jim
+stderr '--filesystem does not work with --alfresco 2 --sample-ui'
+! exists openarch-app
+
 ! exec openarch-app init --bind-ip localhost
 stderr 'invalid --bind-ip localhost'
 

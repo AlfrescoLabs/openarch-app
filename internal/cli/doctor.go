@@ -38,10 +38,12 @@ Checks: docker.cli, docker.daemon, docker.compose, docker.memory, git.cli,
 model.runner, model.url, model.embedding, model.chat, port.<n> (one for each
 port), nuxeo.deployment (with --nuxeo 1), openarch.cli.
 
-The default ports are ` + ports(stack.HostPorts("alfresco", nil, false)) + ` (the proxy and Hyland OpenArch), plus
+The default ports are ` + ports(stack.HostPorts("alfresco", nil, false, false)) + ` (the proxy and Hyland OpenArch), plus
 ` + ports([]int{stack.NuxeoPort}) + ` (Nuxeo) with --nuxeo 1,
 ` + ports([]int{stack.Alfresco2Port, stack.Alfresco2HTTPSPort}) + ` (the second Alfresco) with --alfresco 2, and
-` + ports([]int{stack.SampleUIPort}) + ` (the sample UI) with --sample-ui. The memory thresholds are estimates.`,
+` + ports([]int{stack.SampleUIPort}) + ` (the sample UI) with --sample-ui, and
+` + ports([]int{stack.ConnectorPort}) + ` (the sync API of the filesystem source) with --filesystem.
+The memory thresholds are estimates.`,
 		Example: `  openarch app doctor
   openarch app doctor --alfresco 2 --nuxeo 1 --dir ./my-app
   openarch app doctor --llm-model ai/qwen2.5 --output json
@@ -54,7 +56,7 @@ The default ports are ` + ports(stack.HostPorts("alfresco", nil, false)) + ` (th
 			}
 			opts.Sources = sources
 			if len(opts.Ports) == 0 {
-				opts.Ports = stack.HostPorts(sources.Profile(), sources.Extras(), sampleUI)
+				opts.Ports = stack.HostPorts(sources.Profile(), sources.Extras(), sampleUI, opts.Filesystem)
 			}
 			opts.OpenArchBin = os.Getenv(envBin)
 			report, err := doctor.Run(cmd.Context(), app.doctorEnv(), opts)
@@ -76,6 +78,7 @@ The default ports are ` + ports(stack.HostPorts("alfresco", nil, false)) + ` (th
 	f.StringVar(&opts.EmbeddingModel, "embedding-model", opts.EmbeddingModel, "embedding model in Docker Model Runner")
 	f.StringVar(&opts.ModelURL, "model-url", opts.ModelURL, "Docker Model Runner API, as seen from this machine")
 	f.BoolVar(&sampleUI, "sample-ui", false, "check the port of the sample UI too")
+	f.BoolVar(&opts.Filesystem, "filesystem", false, "check the port and memory of the filesystem source too")
 	f.StringVar(&opts.Dir, "dir", opts.Dir, "setup folder (nuxeo-deployment goes inside it)")
 	f.IntSliceVar(&opts.Ports, "port", nil, "host port that must be free (repeatable, replaces the default ports)")
 	f.StringSliceVar(&opts.Only, "check", nil, "run only this check (repeatable)")
