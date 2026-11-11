@@ -64,7 +64,7 @@ func TestParseEnv(t *testing.T) {
 
 func TestEnvValues(t *testing.T) {
 	c := Config{BindIP: "127.0.0.1", LLMModel: "m", EmbeddingModel: "e"}
-	v, err := envValues(c)
+	v, err := envValues(c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,9 +92,24 @@ func TestEnvValues(t *testing.T) {
 	if _, ok := v["NUXEO_PASSWORD"]; ok {
 		t.Error("NUXEO_PASSWORD must keep its upstream value")
 	}
+	if _, ok := v["NGINX_ROOT_DIRECTIVE"]; ok {
+		t.Error("NGINX_ROOT_DIRECTIVE set without the sample UI")
+	}
+	c.SampleUI = true
+	if v, err = envValues(c, []string{"Branch office", "Head $office"}); err != nil {
+		t.Fatal(err)
+	}
+	// The quotes keep Compose from expanding $demo_ui_upstream.
+	if got := ParseEnv([]byte("X=" + v["NGINX_ROOT_DIRECTIVE"])); got["X"] != "proxy_pass http://$demo_ui_upstream;" || v["NGINX_ROOT_DIRECTIVE"][0] != '\'' {
+		t.Errorf("NGINX_ROOT_DIRECTIVE = %q", v["NGINX_ROOT_DIRECTIVE"])
+	}
+	if v["ALFRESCO_1_DISPLAY_NAME"] != "'Branch office'" || v["ALFRESCO_2_DISPLAY_NAME"] != "'Head $office'" {
+		t.Errorf("names = %q, %q", v["ALFRESCO_1_DISPLAY_NAME"], v["ALFRESCO_2_DISPLAY_NAME"])
+	}
+	c.SampleUI = false
 
 	c.DefaultSecrets, c.DefaultUsers = true, true
-	v, err = envValues(c)
+	v, err = envValues(c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +190,14 @@ func TestComposeArgs(t *testing.T) {
 			t.Errorf("%+v: %s", c, got)
 		}
 	}
+	// The sample UI adds the upstream platform profile after the others.
+	got = strings.Join(ComposeArgs(Config{Sources: srcOf("alfresco", "alfresco-2"), SampleUI: true}), " ")
+	if !strings.HasSuffix(got, "--profile alfresco --profile alfresco-2 --profile platform") {
+		t.Errorf("sample UI: %s", got)
+	}
+	if got := strings.Join(ComposeArgs(Config{Sources: srcOf("full")}), " "); strings.Contains(got, "platform") {
+		t.Errorf("no sample UI: %s", got)
+	}
 }
 
 func TestConfigLoad(t *testing.T) {
@@ -182,12 +205,12 @@ func TestConfigLoad(t *testing.T) {
 	if _, err := Load(dir); output.CodeOf(err) != output.ExitUsage {
 		t.Errorf("missing file: %v", err)
 	}
-	c := Config{SchemaVersion: SchemaVersion, Upstream: "abc", Sources: srcOf("alfresco", "alfresco-2"), BindIP: "127.0.0.1", Context: "app"}
+	c := Config{SchemaVersion: SchemaVersion, Upstream: "abc", Sources: srcOf("alfresco", "alfresco-2"), BindIP: "127.0.0.1", Context: "app", SampleUI: true}
 	if err := Save(dir, c); err != nil {
 		t.Fatal(err)
 	}
 	got, err := Load(dir)
-	if err != nil || got.Sources != (stack.Sources{Alfresco: 2}) || got.Context != "app" {
+	if err != nil || got.Sources != (stack.Sources{Alfresco: 2}) || got.Context != "app" || !got.SampleUI {
 		t.Errorf("round trip = %+v, %v", got, err)
 	}
 	for _, bad := range []string{"schemaVersion: 3\n", "schemaVersion: 2\nunknown: x\n"} {
@@ -471,4 +494,40 @@ func mustRead(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestInitResultSampleUI(t *testing.T) {
+	var b strings.Builder
+	r := InitResult{Dir: "d", Config: Config{Sources: srcOf("alfresco", "alfresco-2"), SampleUI: true}}
+	if err := r.WriteText(&b); err != nil || !strings.Contains(b.String(), "in d (2 Alfresco, sample UI).") {
+		t.Errorf("text = %q, %v", b.String(), err)
+	}
+}
+
+func TestAlfrescoNames(t *testing.T) {
+	two := Config{Sources: stack.Sources{Alfresco: 2}}
+	if got, err := alfrescoNames(two, nil); err != nil || strings.Join(got, ",") != "Alfresco 1,Alfresco 2" {
+		t.Errorf("defaults = %v, %v", got, err)
+	}
+	if got, err := alfrescoNames(two, []string{"Branch", "Head Office"}); err != nil || got[1] != "Head Office" {
+		t.Errorf("names = %v, %v", got, err)
+	}
+	if got, err := alfrescoNames(Config{Sources: stack.Sources{Alfresco: 1, Nuxeo: 1}}, nil); err != nil || got != nil {
+		t.Errorf("one Alfresco = %v, %v", got, err)
+	}
+	for _, c := range []struct {
+		c     Config
+		names []string
+	}{
+		{Config{Sources: stack.Sources{Alfresco: 1}}, []string{"A"}},
+		{two, []string{"only one"}},
+		{two, []string{"A", " "}},
+		{two, []string{"A", "it's"}},
+		{two, []string{"A", "a\nb"}},
+		{two, []string{"A", strings.Repeat("x", maxNameLength+1)}},
+	} {
+		if _, err := alfrescoNames(c.c, c.names); output.CodeOf(err) != output.ExitUsage {
+			t.Errorf("%v %q: %v", c.c.Sources, c.names, err)
+		}
+	}
 }

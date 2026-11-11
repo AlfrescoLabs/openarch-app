@@ -113,8 +113,13 @@ func ParseEnv(data []byte) map[string]string {
 	return env
 }
 
-// envValues returns the settings and secrets that init writes to .env.local.
-func envValues(c Config) (map[string]string, error) {
+// alfrescoNameKeys are the upstream variables of the Alfresco source names,
+// in instance order.
+var alfrescoNameKeys = []string{"ALFRESCO_1_DISPLAY_NAME", "ALFRESCO_2_DISPLAY_NAME"}
+
+// envValues returns the settings and secrets that init writes to .env.local,
+// with names as the names of the Alfresco sources.
+func envValues(c Config, names []string) (map[string]string, error) {
 	v := map[string]string{
 		"BIND_IP":         c.BindIP,
 		"USE_HTTPS":       "false",
@@ -123,6 +128,14 @@ func envValues(c Config) (map[string]string, error) {
 	}
 	for _, g := range stack.GitContexts {
 		v[g.Var] = g.URL()
+	}
+	for i, n := range names {
+		// Single quotes keep spaces and any $ as they are.
+		v[alfrescoNameKeys[i]] = "'" + n + "'"
+	}
+	if c.SampleUI {
+		// Single quotes, so Compose does not expand $demo_ui_upstream.
+		v["NGINX_ROOT_DIRECTIVE"] = "'" + stack.SampleUIRoot + "'"
 	}
 	if !c.DefaultSecrets {
 		for _, k := range RandomSecrets {

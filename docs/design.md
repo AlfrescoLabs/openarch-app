@@ -58,7 +58,7 @@ openarch-app/
   nuxeo-deployment/       # nuxeo-deployment at its pinned commit, only with Nuxeo
 ```
 
-- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), and the commits of the last build. It holds no secrets.
+- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), and the commits of the last build. It holds no secrets.
 - `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
@@ -75,7 +75,7 @@ docker compose -p openarch-app --project-directory upstream \
 
 - `-p openarch-app` replaces the fixed upstream name `content-lake-app`. There is one setup per machine.
 - `.env.local` comes after the upstream `.env`, so its values win.
-- The upstream profile and extras follow from the sources (see Sources). The second Alfresco adds `-f upstream/compose.alfresco-2.yaml` and `--profile alfresco-2`, and a managed Nuxeo adds `-f upstream/compose.nuxeo-deployment.yaml`.
+- The upstream profile and extras follow from the sources (see Sources). The second Alfresco adds `-f upstream/compose.alfresco-2.yaml` and `--profile alfresco-2`, a managed Nuxeo adds `-f upstream/compose.nuxeo-deployment.yaml`, and the sample UI adds `--profile platform` (see Sample UI).
 - Compose resolves relative paths in every file against the project directory, `upstream/`. So `compose.override.yaml` refers to its neighbors with `../` paths, for example `../openarch-users.yml`.
 - Hyland OpenArch keeps its blobs, the embeddings included, in `/deployments/nxserver/data`, and upstream gives that folder no volume. A recreated container would lose them while MongoDB and OpenSearch keep the metadata, and the next permission change would then delete the embeddings. So `compose.override.yaml` adds the volume `hxpr-data`, and a one-shot service `hxpr-data-init` gives it to the OpenArch user (uid 33010) before OpenArch starts: OpenArch cannot write to a volume owned by root.
 
@@ -144,7 +144,7 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 | Command | Built | What it does |
 | --- | --- | --- |
 | `version` | yes | Prints the version. |
-| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the sources, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 with Nuxeo; 8082 and 8445 with a second Alfresco), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
+| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the sources, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 with Nuxeo; 8082 and 8445 with a second Alfresco; 4200 with `--sample-ui`), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
 | `init [dir]` | yes | Creates the setup folder, fetches upstream (and nuxeo-deployment with Nuxeo), writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the next commands: `models pull` and `up`. |
 | `up`, `down`, `status`, `logs` | yes | Run `docker compose up -d --wait`, `down`, `ps` and `logs` with the upstream profile and extras of the sources in `openarch-app.yaml`. `up` warns when a model is missing, fails early when nuxeo-deployment is missing, and prints the endpoints. `down` keeps the volumes. `status` exits with code 4 when a service is not healthy. In JSON mode `logs` returns the logs as one field and does not follow them. |
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
@@ -161,6 +161,8 @@ Flags of `init`:
 | `--embedding-model` | `ai/mxbai-embed-large` | Embedding model |
 | `--bind-ip` | `127.0.0.1` | Host address of every published port |
 | `--context-name` | `app` | Name of the `openarch` context |
+| `--sample-ui` | off | Add the upstream sample UI, served by the proxy at `/` (see Sample UI) |
+| `--alfresco-name` | `Alfresco 1`, `Alfresco 2` | Name of each Alfresco source in the sample UI, repeatable, in instance order. Needs `--alfresco 2` |
 | `--default-secrets` | off | Keep the upstream secrets |
 | `--default-users` | off | Keep the upstream OpenArch users (`admin:password`) and `HXPR_PASSWORD` |
 | `--force` | off | Replace an existing context with the same name |
@@ -179,6 +181,16 @@ A user chooses the sources, not upstream's profiles: `--alfresco N` and `--nuxeo
 A setup needs at least one source, and upstream supports at most two Alfresco instances and one Nuxeo. The upstream-shaped `--profile` and `--extra` of 0.1.x and 0.2.0 still work, with a warning, and cannot be mixed with the new flags.
 
 With two Alfresco instances, `rag-service` lists both instances as sources, and it needs the repository id of each (`ALFRESCO_1_SOURCE_ID`, `ALFRESCO_2_SOURCE_ID`). The id is the repository UUID that Alfresco makes at its first boot and that the ingesters already write on every document, so the plugin reads it and never chooses it. `rag-service` refuses to start while it lists two Alfresco sources and an id is empty, and the other services wait for it. So when an id is empty, `up` first starts `alfresco` and `alfresco-2` alone (with their databases and brokers, and always with a wait), reads `repository.id` from `/alfresco/api/discovery` of each instance (with `curl` inside its container, the login on stdin, so it needs neither the proxy nor a published port), writes the ids to `.env.local`, and then starts the whole stack. After every `up --wait` it reads the ids again, writes them when they changed, and recreates only `rag-service`, so the ids also follow a repository that `down -v` replaced. `smoke-test` then also runs `test/test-two-alfresco.sh`.
+
+## Sample UI
+
+`--sample-ui` on `init` adds the upstream sample UI (`content-lake-app-ui`). It asks questions across every source of the setup, with one login per source, so it shows one answer from Alfresco and Nuxeo, or from two Alfresco instances. Without it, the proxy sends `/` to the Alfresco UI, which knows only its own repository.
+
+Upstream runs the sample UI in the `demo` and `platform` profiles. `demo` is `full` plus the UI, so it would also start Nuxeo. `platform` holds only the UI and services that every profile already has, so the plugin adds `--profile platform` next to the profile of the sources. `init` also writes `NGINX_ROOT_DIRECTIVE='proxy_pass http://$demo_ui_upstream;'` to `.env.local`, so the proxy serves the UI at `/`. The upstream nginx template resolves `$demo_ui_upstream` on each request, so the proxy can start before the UI. The single quotes keep Compose from expanding the variable. The UI container also listens on port 4200, on `BIND_IP`.
+
+With two Alfresco instances, `rag-service` lists the sources by name. `init` writes `ALFRESCO_1_DISPLAY_NAME` and `ALFRESCO_2_DISPLAY_NAME` to `.env.local`, from `--alfresco-name` or the defaults `Alfresco 1` and `Alfresco 2`, in single quotes. A name has 1 to 60 characters and no single quote. With one Alfresco, upstream has one source of each type and names them `Alfresco` and `Nuxeo`, so `--alfresco-name` is refused there.
+
+`sampleUI` is an optional field of `openarch-app.yaml`, so `schemaVersion` stays 2. A file without it is the same as before; a file with it cannot be read by 0.3.0, which refuses unknown fields. The choice is made at `init` only.
 
 ## Limits
 

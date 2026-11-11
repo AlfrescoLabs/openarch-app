@@ -43,6 +43,17 @@ const (
 	NuxeoDeploymentFile = "compose.nuxeo-deployment.yaml"
 	// NuxeoPort publishes the Nuxeo of nuxeo-deployment (NUXEO_HTTP_PORT).
 	NuxeoPort = 8081
+	// SampleUIProfile is the upstream profile that runs the sample UI
+	// (content-lake-app-ui). Next to alfresco or full it adds only the UI: its
+	// other services are in every profile.
+	SampleUIProfile = "platform"
+	// SampleUIPort publishes the sample UI container (DEMO_UI_PORT). The proxy
+	// also serves it at /.
+	SampleUIPort = 4200
+	// SampleUIRoot is the proxy directive for / with the sample UI. The
+	// upstream nginx template sets $demo_ui_upstream and resolves it on each
+	// request, so the proxy starts before the UI does.
+	SampleUIRoot = "proxy_pass http://$demo_ui_upstream;"
 )
 
 // The upstream repository and the commit that every setup uses.
@@ -190,16 +201,19 @@ func ValidProfile(p string) error {
 	return output.Usage(fmt.Sprintf("unknown profile %q", p), "Valid profiles: "+strings.Join(Profiles, ", ")+".")
 }
 
-// HostPorts returns the host ports that a setup with profile and extras
-// publishes. Every profile publishes the same base ports, and the Nuxeo
-// profiles publish Nuxeo too.
-func HostPorts(profile string, extras []string) []int {
+// HostPorts returns the host ports that a setup with profile and extras, and
+// with or without the sample UI, publishes. Every profile publishes the same
+// base ports, and the Nuxeo profiles publish Nuxeo too.
+func HostPorts(profile string, extras []string, sampleUI bool) []int {
 	ports := []int{ProxyPort, ProxyHTTPSPort, OpenArchPort}
 	if NeedsNuxeo(profile) {
 		ports = append(ports, NuxeoPort)
 	}
 	if slices.Contains(extras, "alfresco-2") {
 		ports = append(ports, Alfresco2Port, Alfresco2HTTPSPort)
+	}
+	if sampleUI {
+		ports = append(ports, SampleUIPort)
 	}
 	return ports
 }

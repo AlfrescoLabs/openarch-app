@@ -66,6 +66,15 @@ openarch app init --alfresco 1 --nuxeo 1   # one Alfresco and one Nuxeo
 openarch app init --alfresco 0 --nuxeo 1   # one Nuxeo
 ```
 
+`--sample-ui` adds the upstream sample UI. It asks questions across every source of the setup, with one login per source, and the proxy serves it at `http://127.0.0.1/`:
+
+```sh
+openarch app init --alfresco 1 --nuxeo 1 --sample-ui
+openarch app init --alfresco 2 --sample-ui --alfresco-name "Branch" --alfresco-name "Head Office"
+```
+
+With two Alfresco instances, `--alfresco-name` gives each one the name that the sample UI shows (default: `Alfresco 1` and `Alfresco 2`).
+
 `doctor` takes the same flags. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
 After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:

@@ -35,6 +35,9 @@ stderr 'unknown profile "nope"'
 stderr 'port.8082'
 ! exec openarch-app doctor --alfresco 0 --nuxeo 1 --check nope
 stderr 'port.8081'
+# The sample UI adds 4200
+! exec openarch-app doctor --sample-ui --check nope
+stderr 'port.4200'
 ! exec openarch-app doctor --check nope -o json
 stdout '"code": "usage"'
 stdout 'unknown check'

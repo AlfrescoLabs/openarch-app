@@ -211,6 +211,17 @@ func TestEndpointsAlfresco2(t *testing.T) {
 	}
 }
 
+func TestEndpointsSampleUI(t *testing.T) {
+	s := newSetup(t, Config{Sources: srcOf("full"), BindIP: "127.0.0.1", Context: "app", SampleUI: true})
+	if first := s.Endpoints()[0]; first != (Endpoint{"Sample UI", "http://127.0.0.1/"}) {
+		t.Errorf("first endpoint = %+v", first)
+	}
+	s.Config.SampleUI = false
+	if first := s.Endpoints()[0]; first.Name == "Sample UI" {
+		t.Errorf("sample UI endpoint without the sample UI")
+	}
+}
+
 func TestParsePS(t *testing.T) {
 	lines := `{"Service":"rag-service","State":"running","Health":"healthy","ExitCode":0,"Publishers":[]}
 {"Service":"hxpr-app","State":"running","Health":"starting","ExitCode":0,"Publishers":[{"URL":"127.0.0.1","PublishedPort":8090,"TargetPort":8080},{"URL":"127.0.0.1","PublishedPort":8090,"TargetPort":8080}]}

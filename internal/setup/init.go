@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
 	"github.com/AlfrescoLabs/openarch-app/internal/stack"
@@ -74,6 +75,42 @@ type InitOptions struct {
 	Force bool
 	// OpenArchBin is the openarch command. Empty means "openarch" from PATH.
 	OpenArchBin string
+	// AlfrescoNames are the names of the Alfresco sources that the sample UI
+	// shows, one for each instance. They need two instances: upstream names
+	// only a list of sources. Empty means DefaultAlfrescoNames.
+	AlfrescoNames []string
+}
+
+// DefaultAlfrescoNames are the names of the two Alfresco sources when init
+// gets none.
+var DefaultAlfrescoNames = []string{"Alfresco 1", "Alfresco 2"}
+
+// maxNameLength is the longest Alfresco source name.
+const maxNameLength = 60
+
+// alfrescoNames returns the names of the Alfresco sources of c, or a usage
+// error. A name goes into .env.local in single quotes, so it cannot hold one.
+func alfrescoNames(c Config, names []string) ([]string, error) {
+	if c.Alfresco < 2 {
+		if len(names) > 0 {
+			return nil, output.Usage("--alfresco-name needs --alfresco 2", "With one Alfresco, the sources are named Alfresco and Nuxeo.")
+		}
+		return nil, nil
+	}
+	if len(names) == 0 {
+		return DefaultAlfrescoNames, nil
+	}
+	if len(names) != c.Alfresco {
+		return nil, output.Usage(fmt.Sprintf("--alfresco-name given %d times, want %d", len(names), c.Alfresco), "Give one name for each Alfresco instance, in order.")
+	}
+	for _, n := range names {
+		bad := strings.TrimSpace(n) == "" || len(n) > maxNameLength || strings.ContainsRune(n, '\'') ||
+			strings.ContainsFunc(n, unicode.IsControl)
+		if bad {
+			return nil, output.Usage(fmt.Sprintf("invalid --alfresco-name %q", n), fmt.Sprintf("Use 1 to %d characters, with no single quote.", maxNameLength))
+		}
+	}
+	return names, nil
 }
 
 // InitResult describes a new setup.
@@ -89,7 +126,11 @@ type InitResult struct {
 // WriteText writes the human-readable form.
 func (r InitResult) WriteText(w io.Writer) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Created the App for OpenArch setup in %s (%s).\n", r.Dir, r.Config.Sources)
+	what := r.Config.String()
+	if r.Config.SampleUI {
+		what += ", sample UI"
+	}
+	fmt.Fprintf(&b, "Created the App for OpenArch setup in %s (%s).\n", r.Dir, what)
 	fmt.Fprintf(&b, "Upstream commit %s.\n", r.Config.Upstream)
 	for _, f := range r.Reused {
 		fmt.Fprintf(&b, "Kept the existing %s.\n", f)
@@ -113,6 +154,10 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 	c.Upstream = stack.UpstreamRef
 	c.ManagedNuxeo = c.Nuxeo > 0
 	if err := c.Valid(); err != nil {
+		return InitResult{}, err
+	}
+	names, err := alfrescoNames(c, opts.AlfrescoNames)
+	if err != nil {
 		return InitResult{}, err
 	}
 	dir, err := filepath.Abs(opts.Dir)
@@ -157,7 +202,7 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 		}
 	}
 
-	merged, reused, err := writeEnv(dir, &c)
+	merged, reused, err := writeEnv(dir, &c, names)
 	if err != nil {
 		return res, err
 	}
@@ -276,13 +321,13 @@ func fetchPinned(ctx context.Context, env Env, dir string, r pinnedRepo, cmd str
 // writeEnv writes .env.local, or keeps an existing one, and returns the
 // upstream .env values with the .env.local values on top. An existing file
 // sets the bind IP in c, so the config matches what Compose will use.
-func writeEnv(dir string, c *Config) (map[string]string, bool, error) {
+func writeEnv(dir string, c *Config, names []string) (map[string]string, bool, error) {
 	path := filepath.Join(dir, EnvFile)
 	local, err := os.ReadFile(path)
 	reused := err == nil
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		values, err := envValues(*c)
+		values, err := envValues(*c, names)
 		if err != nil {
 			return nil, false, err
 		}

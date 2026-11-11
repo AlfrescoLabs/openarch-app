@@ -17,6 +17,7 @@ const envBin = "OPENARCH_BIN"
 
 func newDoctorCmd(app *App) *cobra.Command {
 	var sf sourceFlags
+	var sampleUI bool
 	opts := doctor.Options{
 		LLMModel:       stack.DefaultLLMModel,
 		EmbeddingModel: stack.DefaultEmbeddingModel,
@@ -37,10 +38,10 @@ Checks: docker.cli, docker.daemon, docker.compose, docker.memory, git.cli,
 model.runner, model.url, model.embedding, model.chat, port.<n> (one for each
 port), nuxeo.deployment (with --nuxeo 1), openarch.cli.
 
-The default ports are ` + ports(stack.HostPorts("alfresco", nil)) + ` (the proxy and Hyland OpenArch), plus
-` + ports([]int{stack.NuxeoPort}) + ` (Nuxeo) with --nuxeo 1, and
-` + ports([]int{stack.Alfresco2Port, stack.Alfresco2HTTPSPort}) + ` (the second Alfresco) with --alfresco 2. The memory thresholds
-are estimates.`,
+The default ports are ` + ports(stack.HostPorts("alfresco", nil, false)) + ` (the proxy and Hyland OpenArch), plus
+` + ports([]int{stack.NuxeoPort}) + ` (Nuxeo) with --nuxeo 1,
+` + ports([]int{stack.Alfresco2Port, stack.Alfresco2HTTPSPort}) + ` (the second Alfresco) with --alfresco 2, and
+` + ports([]int{stack.SampleUIPort}) + ` (the sample UI) with --sample-ui. The memory thresholds are estimates.`,
 		Example: `  openarch app doctor
   openarch app doctor --alfresco 2 --nuxeo 1 --dir ./my-app
   openarch app doctor --llm-model ai/qwen2.5 --output json
@@ -53,7 +54,7 @@ are estimates.`,
 			}
 			opts.Sources = sources
 			if len(opts.Ports) == 0 {
-				opts.Ports = stack.HostPorts(sources.Profile(), sources.Extras())
+				opts.Ports = stack.HostPorts(sources.Profile(), sources.Extras(), sampleUI)
 			}
 			opts.OpenArchBin = os.Getenv(envBin)
 			report, err := doctor.Run(cmd.Context(), app.doctorEnv(), opts)
@@ -74,6 +75,7 @@ are estimates.`,
 	f.StringVar(&opts.LLMModel, "llm-model", opts.LLMModel, "chat model in Docker Model Runner")
 	f.StringVar(&opts.EmbeddingModel, "embedding-model", opts.EmbeddingModel, "embedding model in Docker Model Runner")
 	f.StringVar(&opts.ModelURL, "model-url", opts.ModelURL, "Docker Model Runner API, as seen from this machine")
+	f.BoolVar(&sampleUI, "sample-ui", false, "check the port of the sample UI too")
 	f.StringVar(&opts.Dir, "dir", opts.Dir, "setup folder (nuxeo-deployment goes inside it)")
 	f.IntSliceVar(&opts.Ports, "port", nil, "host port that must be free (repeatable, replaces the default ports)")
 	f.StringSliceVar(&opts.Only, "check", nil, "run only this check (repeatable)")

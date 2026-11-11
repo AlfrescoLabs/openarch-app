@@ -40,11 +40,19 @@ start. If init fails, run it again: it keeps upstream/ and .env.local.
 
 --alfresco and --nuxeo say how many instances of each source the setup runs:
 at most 2 Alfresco and 1 Nuxeo, and at least one source. With Nuxeo, init also
-fetches nuxeo-deployment, and Nuxeo runs in the same stack.`,
+fetches nuxeo-deployment, and Nuxeo runs in the same stack.
+
+--sample-ui adds the upstream sample UI, which asks questions across every
+source of the setup. The proxy serves it at /, and its container listens on
+port 4200 too. With two Alfresco instances, --alfresco-name names them, once
+for each instance (default: "Alfresco 1" and "Alfresco 2").`,
 		Example: `  openarch app init                            # one Alfresco
   openarch app init --alfresco 2               # two Alfresco instances
   openarch app init --alfresco 1 --nuxeo 1     # one Alfresco and one Nuxeo
   openarch app init --alfresco 0 --nuxeo 1     # one Nuxeo
+  openarch app init --alfresco 2 --sample-ui   # two Alfresco and the sample UI
+  openarch app init --alfresco 2 --sample-ui \
+    --alfresco-name "Northgate Branch" --alfresco-name "Northgate Head Office"
   openarch app init ./my-app --llm-model ai/qwen2.5 --output json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -75,6 +83,8 @@ fetches nuxeo-deployment, and Nuxeo runs in the same stack.`,
 	f.StringVar(&s.EmbeddingModel, "embedding-model", s.EmbeddingModel, "embedding model in Docker Model Runner")
 	f.StringVar(&s.BindIP, "bind-ip", s.BindIP, "host address of every published port")
 	f.StringVar(&s.Context, "context-name", s.Context, "name of the openarch context for the bundled Hyland OpenArch")
+	f.BoolVar(&s.SampleUI, "sample-ui", false, "add the sample UI, served by the proxy at /")
+	f.StringArrayVar(&opts.AlfrescoNames, "alfresco-name", nil, "name of an Alfresco source in the sample UI (repeatable, in instance order; needs --alfresco 2)")
 	f.BoolVar(&s.DefaultSecrets, "default-secrets", false, "keep the upstream secrets instead of random ones")
 	f.BoolVar(&s.DefaultUsers, "default-users", false, "keep the upstream OpenArch users (admin:password)")
 	f.BoolVar(&opts.Force, "force", false, "replace an openarch context with the same name")

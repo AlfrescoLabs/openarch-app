@@ -85,6 +85,9 @@ func (s Setup) Endpoints() []Endpoint {
 	host := contextHost(s.Config.BindIP)
 	base := "http://" + host
 	var e []Endpoint
+	if s.Config.SampleUI {
+		e = append(e, Endpoint{"Sample UI", base + "/"})
+	}
 	if s.Config.Alfresco > 0 {
 		e = append(e, Endpoint{"Alfresco UI (ACA)", base + "/aca/"}, Endpoint{"Alfresco repository", base + "/alfresco/"})
 	}

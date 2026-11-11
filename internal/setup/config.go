@@ -50,6 +50,9 @@ type Config struct {
 	// it in the same Compose project. A setup made before 0.3.0 has a
 	// nuxeo-deployment that the user started as a project of its own.
 	ManagedNuxeo bool `yaml:"managedNuxeo,omitempty" json:"managedNuxeo,omitempty"`
+	// SampleUI runs the upstream sample UI, which the proxy serves at /. It is
+	// optional, so a file without it keeps schemaVersion 2.
+	SampleUI bool `yaml:"sampleUI,omitempty" json:"sampleUI,omitempty"`
 	// BuiltContexts maps each build context variable, and "upstream", to the
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`

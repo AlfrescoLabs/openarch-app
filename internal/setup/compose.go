@@ -23,5 +23,8 @@ func ComposeArgs(c Config) []string {
 	for _, e := range c.Extras() {
 		args = append(args, "--profile", e)
 	}
+	if c.SampleUI {
+		args = append(args, "--profile", stack.SampleUIProfile)
+	}
 	return args
 }
