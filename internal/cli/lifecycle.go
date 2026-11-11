@@ -249,6 +249,7 @@ needs bash, curl and python3). Any other model is left alone.`,
 
 func newSmokeTestCmd(app *App) *cobra.Command {
 	var dir string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "smoke-test",
 		Short: "Run the upstream test suite against the running stack",
@@ -259,6 +260,9 @@ test/run-tests.sh. With two Alfresco instances it also runs
 test/test-two-alfresco.sh. The suites create test documents and remove them.
 They need bash, curl and jq.
 
+With an existing Alfresco (init --alfresco-env), the suite writes its test
+users, groups and folders into that Alfresco, so it needs --yes.
+
 In text mode the suite output goes to stdout; in JSON mode it goes to stderr,
 and stdout holds the counts. Exit code 4 means a check failed.`,
 		Example: `  openarch app smoke-test
@@ -268,6 +272,10 @@ and stdout holds the counts. Exit code 4 means a check failed.`,
 			s, err := app.openSetup(dir)
 			if err != nil {
 				return err
+			}
+			if s.Config.ExternalAlfresco != "" && !yes {
+				return output.Usage("smoke-test writes test users, groups and folders into the existing Alfresco "+s.Config.ExternalAlfresco,
+					"Run it with --yes if that is fine. The suite removes them at the end.")
 			}
 			out := app.Streams.Out
 			if app.Printer.Format() == output.JSON {
@@ -287,6 +295,7 @@ and stdout holds the counts. Exit code 4 means a check failed.`,
 		},
 	}
 	addDirFlag(cmd, &dir)
+	cmd.Flags().BoolVar(&yes, "yes", false, "run also on an existing Alfresco, which gets test data")
 	return cmd
 }
 

@@ -119,7 +119,7 @@ var alfrescoNameKeys = []string{"ALFRESCO_1_DISPLAY_NAME", "ALFRESCO_2_DISPLAY_N
 
 // envValues returns the settings and secrets that init writes to .env.local,
 // with names as the names of the Alfresco sources and source as the values of
-// the settings of the connector source.
+// the settings of the connector source and of an existing Alfresco.
 func envValues(c Config, names []string, source map[string]string) (map[string]string, error) {
 	v := map[string]string{
 		"BIND_IP":         c.BindIP,
@@ -139,7 +139,7 @@ func envValues(c Config, names []string, source map[string]string) (map[string]s
 		v["NGINX_ROOT_DIRECTIVE"] = "'" + stack.SampleUIRoot + "'"
 	}
 	if c.Connector() != "" {
-		cv, err := connectorValues(c, source)
+		cv, err := connectorValues(c)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +155,11 @@ func envValues(c Config, names []string, source map[string]string) (map[string]s
 			}
 			v[k] = p
 		}
+		// An existing Alfresco has its own admin password, from source.
 		for _, a := range alfrescoAdmins {
+			if c.ExternalAlfresco != "" {
+				break
+			}
 			p, err := NewPassword()
 			if err != nil {
 				return nil, err
@@ -171,6 +175,11 @@ func envValues(c Config, names []string, source map[string]string) (map[string]s
 		}
 		v[adminUserKey] = adminUser
 		v[adminPasswordKey] = p
+	}
+	// The values of the sources win, so the logins of an existing Alfresco
+	// replace the random secrets of the bundled one.
+	for k, x := range source {
+		v[k] = x
 	}
 	return v, nil
 }

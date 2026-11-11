@@ -22,7 +22,6 @@ Not in the first version:
 - HTTPS. Every port binds to `127.0.0.1` by default.
 - The other upstream profiles and extras: `demo`, `debug`, `observability`, `sharepoint-mock`, `transform-extras`. The plugin uses `platform` only for the sample UI and `connector` only for the filesystem source.
 - More than two Alfresco instances or more than one Nuxeo.
-- An Alfresco that the user already runs, instead of the bundled one.
 - Admin commands for a running stack (connectors, sources, RAG questions, reindex).
 
 ## Rules
@@ -58,7 +57,7 @@ openarch-app/
   nuxeo-deployment/       # nuxeo-deployment at its pinned commit, only with Nuxeo
 ```
 
-- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), the URL of the CMIS source (`cmis`), and the commits of the last build. It holds no secrets.
+- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), the URL of the CMIS source (`cmis`), the URL of an existing Alfresco (`externalAlfresco`), and the commits of the last build. It holds no secrets.
 - `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
@@ -150,6 +149,7 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
 | `upgrade` | yes | Moves the setup to the upstream commit and build contexts of the binary (see Upgrades). |
 | `smoke-test` | yes | Runs the upstream suite of the sources against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/test-rag-full.sh` for `full` (it covers both sources). These are the suites of the upstream `test/run-tests.sh`; `test/smoke-test.sh` is a check for a demo host and wants the demo UI at `/`. It runs from the setup folder, never from `upstream/`. |
+| `alfresco-module` | yes | Builds the repository module JAR for an existing Alfresco from the pinned commit, and prints the steps to install it (see Existing Alfresco). |
 | `sync` | yes | Starts a sync of the filesystem or CMIS source and waits for the job (see Filesystem source). Exit code 4 means the job failed, a file failed, or the job still runs after `--timeout`. |
 
 Flags of `init`:
@@ -169,6 +169,7 @@ Flags of `init`:
 | `--filesystem-everyone` | off | Every user can read the files of `--filesystem` |
 | `--cmis-env` | none | File with the settings of a CMIS source (see CMIS source) |
 | `--cmis-password-stdin` | off | Read the CMIS password from the first line of stdin |
+| `--alfresco-env` | none | File with the URLs and logins of an existing Alfresco that replaces the bundled one (see Existing Alfresco) |
 | `--default-secrets` | off | Keep the upstream secrets |
 | `--default-users` | off | Keep the upstream OpenArch users (`admin:password`) and `HXPR_PASSWORD` |
 | `--force` | off | Replace an existing context with the same name |
@@ -226,6 +227,41 @@ With two Alfresco instances, `rag-service` lists the sources by name. `init` wri
 - The password is never a flag value (Rule 6). It is `CMIS_PASSWORD` in the file, or the variable `OPENARCH_APP_CMIS_PASSWORD`, or the first line of stdin with `--cmis-password-stdin`, or a prompt in an interactive terminal.
 - The connector takes the readers of each document from its CMIS permissions, and maps the "anyone" principal of the repository to everyone. The RAG service looks up no groups for a CMIS source, so a document that only a group can read is found by nobody.
 - `cmis` (the URL) is an optional field of `openarch-app.yaml`, so `schemaVersion` stays 2. The other settings are in `.env.local` only.
+
+## Existing Alfresco
+
+`--alfresco-env <file>` on `init` uses an Alfresco that the user already runs, instead of the bundled one. The plugin never changes that Alfresco: it builds the module, prints the steps, and checks the result. The user owns every change on the Alfresco side. It works with `--alfresco 1 --nuxeo 0`, the case that is tested; a second Alfresco or Nuxeo next to it is refused.
+
+Upstream runs it with the `alfresco-external` profile: the Alfresco ingesters, `transform-core-aio`, ACA, Hyland OpenArch, `rag-service` and the proxy, and none of the bundled Alfresco services. So every Compose call uses `--profile alfresco-external` instead of `alfresco`.
+
+### On the Alfresco side
+
+1. Back up the Alfresco database and content store. The module adds content model aspects, and Alfresco keeps nodes with those aspects in the database.
+2. `openarch app alfresco-module <dir>` builds `content-lake-repo-model-<version>.jar` from the pinned `content-lake-app` commit, with the upstream `model-jar` Dockerfile stage, so the host needs no Maven.
+3. Copy the JAR into `webapps/alfresco/WEB-INF/lib/` of the repository, or into the image that runs it (alfresco-docker-installer: `alfresco/modules/jars/`).
+4. Set the module properties: `content.lake.permission.sync.enabled=true`, `.broker-url`, `.broker-user` and `.broker-password`, with the broker as Alfresco reaches it.
+5. Make the broker reachable from the stack. For example, alfresco-docker-installer publishes no broker port.
+6. With Alfresco Search Community, mount `upstream/acs/search/reindex.prefixes-file.json` in the batch indexer and set `ALFRESCO_REINDEX_PREFIXES_FILE`, so the `cl` prefix is indexed.
+7. Restart Alfresco.
+
+### What the plugin does
+
+- The file has `KEY=value` lines with the keys of the upstream profile: `ALFRESCO_URL`, `ALFRESCO_EVENT_BROKER_URL`, `ALFRESCO_ADMIN_USER`, `ALFRESCO_ADMIN_PASSWORD`, `ACTIVEMQ_USER` and `ACTIVEMQ_PASSWORD`, and optionally `CONTENT_LAKE_PERMISSION_SYNC_BROKER_URL` (default: the Event2 broker) and `ALFRESCO_PROXY_UPSTREAM` (default: host and port of `ALFRESCO_URL`). `init` refuses other keys. The passwords are in the file, as with `--cmis-env`, never in a flag value.
+- The URLs are the ones that the containers reach, so `init` refuses `localhost` and `127.*`, a login in a URL, and a path in `ALFRESCO_URL` (the clients add `/alfresco`). `ALFRESCO_URL` must be `http`: the proxy forwards `/alfresco/` over plain HTTP.
+- `init` writes the keys to `.env.local` in single quotes, and `TRANSFORM_ACTIVEMQ_URL=false`: there is no bundled broker, and the transform engine works over HTTP. It writes no `ALFRESCO_ADMIN_PASSWORD_HASH`, because there is no bundled Alfresco to bootstrap. The logins of the file replace the random secrets of the bundled Alfresco.
+- After every `up` with a wait, the plugin checks the Alfresco through the proxy of the stack, which forwards `/alfresco/` to it: the login works, the version is 25 or later (from the discovery API), and the aspect `cl:indexed` exists. A missing module fails with the steps above.
+- `smoke-test` runs `test/test-alfresco.sh`. It creates test users, groups and folders in that Alfresco and removes them at the end, so it needs `--yes`.
+- `externalAlfresco` (the URL) is an optional field of `openarch-app.yaml`, so `schemaVersion` stays 2.
+
+### Answers
+
+| Question | Answer |
+| --- | --- |
+| How the module is installed | By the user. The plugin builds the JAR from the pinned commit and prints the steps. It never copies files to, or restarts, a system it does not own. |
+| Alfresco versions | 25.x and later, as the content-lake-app README says (upstream builds the module against 25.2). Tested with Community 26.2 from alfresco-docker-installer. Enterprise is not tested. |
+| Backup and dry run | The backup is step 1, by the user. There is no dry run: `up` checks the Alfresco right after the stack starts, and the ingesters only sync folders that have the `cl:indexed` aspect of the module. |
+| Uninstall | Remove the JAR and the properties, then restart. Nodes keep the `cl:` aspects and properties. What Alfresco does with aspects of a removed model is not checked yet. The safe way is to remove the aspects first, or to keep the JAR. |
+| Permissions on the Alfresco system | One account in `GROUP_ALFRESCO_ADMINISTRATORS`. The ingesters read every node with its permissions, add `cl:indexed` to root folders and write `cl:syncStatus`, and `rag-service` reads the groups of each caller. Plus a broker account that reads the topic `alfresco.repo.event2` and reads and writes the queue `contentlake.acl.changed`. |
 
 ## Limits
 

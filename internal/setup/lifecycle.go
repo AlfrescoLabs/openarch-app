@@ -185,7 +185,7 @@ func (s Setup) CheckNuxeo() error {
 // has the upstream admin password, without the user having asked for it with
 // --default-secrets. Setups made before 0.2.0 have it.
 func (s Setup) UsesUpstreamAlfrescoAdmin() bool {
-	if s.Config.Alfresco == 0 || s.Config.DefaultSecrets {
+	if s.Config.Alfresco == 0 || s.Config.DefaultSecrets || s.Config.ExternalAlfresco != "" {
 		return false
 	}
 	values, err := s.env()
@@ -248,6 +248,12 @@ func Up(ctx context.Context, env Env, s Setup, opts UpOptions, st Streams) (UpRe
 			s.Config.BuiltContexts[g.Var] = g.Ref
 		}
 		if err := Save(s.Dir, s.Config); err != nil {
+			return res, err
+		}
+	}
+	// The proxy forwards /alfresco/ to an existing Alfresco once it runs.
+	if opts.Wait && s.Config.ExternalAlfresco != "" {
+		if err := CheckExternalAlfresco(ctx, env, s); err != nil {
 			return res, err
 		}
 	}
@@ -498,6 +504,8 @@ var smokeScripts = map[string]string{
 	"alfresco": "test/test-alfresco.sh",
 	"nuxeo":    "test/test-nuxeo.sh",
 	"full":     "test/test-rag-full.sh",
+	// An existing Alfresco gets the same suite as the bundled one.
+	externalAlfrescoProfile: "test/test-alfresco.sh",
 }
 
 // SmokeTest runs the upstream test suite for the profile against the running

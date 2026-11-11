@@ -60,6 +60,13 @@ stderr '--cmis-password-stdin needs --cmis-env'
 stderr '--filesystem and --cmis-env cannot be combined'
 ! exists openarch-app
 
+# --alfresco-env replaces the bundled Alfresco, with no other source.
+! exec openarch-app init --alfresco 1 --nuxeo 1 --alfresco-env alfresco.env
+stderr '--alfresco-env works with --alfresco 1 --nuxeo 0 only'
+! exec openarch-app init --alfresco-env alfresco-short.env
+stderr 'needs ALFRESCO_EVENT_BROKER_URL, ALFRESCO_ADMIN_USER, ALFRESCO_ADMIN_PASSWORD, ACTIVEMQ_USER, ACTIVEMQ_PASSWORD'
+! exists openarch-app
+
 ! exec openarch-app init --bind-ip localhost
 stderr 'invalid --bind-ip localhost'
 
@@ -90,5 +97,14 @@ CMIS_USERNAME=reader
 CMIS_PASSWORD=p
 CMIS_ACL_FALLBACK=public
 -- empty.txt --
+-- alfresco.env --
+ALFRESCO_URL=http://host.docker.internal:8180
+ALFRESCO_EVENT_BROKER_URL=tcp://host.docker.internal:61616
+ALFRESCO_ADMIN_USER=admin
+ALFRESCO_ADMIN_PASSWORD=pw
+ACTIVEMQ_USER=admin
+ACTIVEMQ_PASSWORD=pw
+-- alfresco-short.env --
+ALFRESCO_URL=http://host.docker.internal:8180
 -- done/openarch-app.yaml --
 schemaVersion: 1

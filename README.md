@@ -9,7 +9,7 @@ The plugin wraps the upstream [content-lake-app-deployment](https://github.com/A
 
 ## Status
 
-In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `sync`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
+In development. Every command of the first version works: `doctor`, `init`, `models pull`, `up`, `status`, `logs`, `smoke-test`, `sync`, `alfresco-module`, `down` and `version`. `upgrade` moves a setup to the upstream commit of a newer release.
 
 ## Install
 
@@ -100,7 +100,17 @@ The readers of each document come from its CMIS permissions. Users and everyone 
 
 A setup has at most one of `--filesystem` and `--cmis-env`. Neither works with `--alfresco 2 --sample-ui`, because that sample UI does not find their documents.
 
-`doctor` takes the same flags. There, `--filesystem` and `--cmis` take no value: they add the port and memory of the source. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
+`doctor` takes the same flags. There, `--filesystem` and `--cmis` take no value: they add the port and memory of the source.
+
+`--alfresco-env` uses an Alfresco that you already run (25.x or later) instead of the bundled one. The plugin never changes that Alfresco. You install the repository module there yourself, and `up` checks it:
+
+```sh
+openarch app init --alfresco-env alfresco.env
+openarch app alfresco-module ./alfresco-module   # the JAR and the steps for your Alfresco
+openarch app up
+```
+
+The file holds `ALFRESCO_URL` and `ALFRESCO_EVENT_BROKER_URL` as the containers reach them (for example `http://host.docker.internal:8180` and `tcp://host.docker.internal:61616`), an administrator login (`ALFRESCO_ADMIN_USER`, `ALFRESCO_ADMIN_PASSWORD`) and the broker login (`ACTIVEMQ_USER`, `ACTIVEMQ_PASSWORD`). It works with `--alfresco 1 --nuxeo 0`. `smoke-test` writes test users and folders into that Alfresco, so it needs `--yes` there. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
 After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:
 

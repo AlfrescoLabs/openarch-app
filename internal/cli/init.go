@@ -71,7 +71,17 @@ CMIS permissions: users and everyone, not groups. 'openarch app sync' reads
 the repository.
 
 A setup has at most one of --filesystem and --cmis-env. Neither works with
---alfresco 2 --sample-ui: that sample UI does not find their documents.`,
+--alfresco 2 --sample-ui: that sample UI does not find their documents.
+
+--alfresco-env uses an Alfresco that you already run (25.x or later) instead
+of the bundled one, with --alfresco 1 --nuxeo 0. The file holds KEY=value
+lines: ALFRESCO_URL (without /alfresco, as the containers reach it, for
+example http://host.docker.internal:8180), ALFRESCO_EVENT_BROKER_URL (its
+ActiveMQ, for example tcp://host.docker.internal:61616), ALFRESCO_ADMIN_USER
+and ALFRESCO_ADMIN_PASSWORD (an administrator), ACTIVEMQ_USER and
+ACTIVEMQ_PASSWORD, and optionally CONTENT_LAKE_PERMISSION_SYNC_BROKER_URL and
+ALFRESCO_PROXY_UPSTREAM. init never changes that Alfresco: install the module
+of 'openarch app alfresco-module' there first. up checks it.`,
 		Example: `  openarch app init                            # one Alfresco
   openarch app init --alfresco 2               # two Alfresco instances
   openarch app init --alfresco 1 --nuxeo 1     # one Alfresco and one Nuxeo
@@ -81,6 +91,7 @@ A setup has at most one of --filesystem and --cmis-env. Neither works with
     --alfresco-name "Northgate Branch" --alfresco-name "Northgate Head Office"
   openarch app init --filesystem ~/Documents/shared \
     --filesystem-reader jim --filesystem-reader dwight
+  openarch app init --alfresco-env alfresco.env   # an Alfresco you already run
   openarch app init ./my-app --llm-model ai/qwen2.5 --output json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -122,6 +133,7 @@ A setup has at most one of --filesystem and --cmis-env. Neither works with
 	f.BoolVar(&opts.FilesystemEveryone, "filesystem-everyone", false, "let every user read the files of --filesystem")
 	f.StringVar(&opts.CMISEnv, "cmis-env", "", "file with the settings of a CMIS source (CMIS_URL, CMIS_USERNAME, ...)")
 	f.BoolVar(&cmisStdin, "cmis-password-stdin", false, "read the CMIS password from the first line of stdin")
+	f.StringVar(&opts.AlfrescoEnv, "alfresco-env", "", "file with the URLs and logins of an existing Alfresco that replaces the bundled one")
 	f.BoolVar(&s.DefaultSecrets, "default-secrets", false, "keep the upstream secrets instead of random ones")
 	f.BoolVar(&s.DefaultUsers, "default-users", false, "keep the upstream OpenArch users (admin:password)")
 	f.BoolVar(&opts.Force, "force", false, "replace an openarch context with the same name")

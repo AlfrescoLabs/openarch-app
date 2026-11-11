@@ -46,10 +46,9 @@ func checkConnector(c Config, cmis bool) error {
 	return nil
 }
 
-// connectorValues returns the .env.local values of the connector source of c,
-// with source as the values of its own settings. The sync API binds to the
-// bind IP.
-func connectorValues(c Config, source map[string]string) (map[string]string, error) {
+// connectorValues returns the .env.local values that every connector source
+// of c needs. The sync API binds to the bind IP.
+func connectorValues(c Config) (map[string]string, error) {
 	// Upstream has no sync account to keep, so it is random also with
 	// --default-secrets.
 	password, err := NewPassword()
@@ -61,9 +60,6 @@ func connectorValues(c Config, source map[string]string) (map[string]string, err
 		"CONNECTOR_PORT":        fmt.Sprintf("%s:%d", c.BindIP, stack.ConnectorPort),
 		syncUserKey:             syncUser,
 		syncPasswordKey:         password,
-	}
-	for k, x := range source {
-		v[k] = x
 	}
 	return v, nil
 }

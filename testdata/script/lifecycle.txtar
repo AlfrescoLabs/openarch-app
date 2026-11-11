@@ -26,12 +26,28 @@ cd ../nuxeo
 stderr 'Nuxeo needs .*nuxeo-deployment, which init fetched and is now missing'
 stderr 'git -C .*nuxeo-deployment checkout --detach 0a5569054e6bb2763770d8ecd1d5c26f019fdc5d'
 
+# smoke-test writes test data into an existing Alfresco, so it needs --yes.
+cd ../external
+! exec openarch-app smoke-test
+stderr 'smoke-test writes test users, groups and folders into the existing Alfresco http://host.docker.internal:8180'
+stderr 'Run it with --yes'
+
 # A setup of 0.2.0 or earlier needs upgrade first.
 cd ../v1
 ! exec openarch-app status
 stderr 'schemaVersion 1, this build reads 2'
 stderr 'openarch app upgrade'
 
+-- external/openarch-app.yaml --
+schemaVersion: 2
+upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
+alfresco: 1
+nuxeo: 0
+llmModel: ai/qwen2.5
+embeddingModel: ai/mxbai-embed-large
+bindIP: 127.0.0.1
+context: app
+externalAlfresco: http://host.docker.internal:8180
 -- future/openarch-app.yaml --
 schemaVersion: 9
 -- setup/openarch-app.yaml --

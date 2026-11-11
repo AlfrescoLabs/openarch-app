@@ -92,6 +92,9 @@ type InitOptions struct {
 	// CMISPassword returns the CMIS password when CMISEnv has none. Nil
 	// means that there is no other way to get it.
 	CMISPassword func() (string, error)
+	// AlfrescoEnv is a file with the URLs and logins of an existing Alfresco
+	// that replaces the bundled one, or empty.
+	AlfrescoEnv string
 }
 
 // DefaultAlfrescoNames are the names of the two Alfresco sources when init
@@ -146,6 +149,9 @@ func (r InitResult) WriteText(w io.Writer) error {
 	if r.Config.CMIS != "" {
 		what += ", CMIS " + r.Config.CMIS
 	}
+	if r.Config.ExternalAlfresco != "" {
+		what = "the existing Alfresco " + r.Config.ExternalAlfresco + strings.TrimPrefix(what, "1 Alfresco")
+	}
 	if r.Config.SampleUI {
 		what += ", sample UI"
 	}
@@ -190,6 +196,16 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 		if source, err = cmisSource(&c, opts.CMISEnv, opts.CMISPassword); err != nil {
 			return InitResult{}, err
 		}
+	}
+	existing, err := alfrescoSource(&c, opts.AlfrescoEnv)
+	if err != nil {
+		return InitResult{}, err
+	}
+	if len(existing) > 0 && source == nil {
+		source = map[string]string{}
+	}
+	for k, v := range existing {
+		source[k] = v
 	}
 	dir, err := filepath.Abs(opts.Dir)
 	if err != nil {
@@ -285,7 +301,11 @@ func nextSteps(c Config, dir string) []string {
 	if c.ManagedNuxeo {
 		up += "   (the first start builds Nuxeo from source, which takes long)"
 	}
-	steps := []string{"openarch app models pull" + flag, up}
+	steps := []string{"openarch app models pull" + flag}
+	if c.ExternalAlfresco != "" {
+		steps = append(steps, "openarch app alfresco-module ./alfresco-module"+flag+"   (then install it in the existing Alfresco and restart it)")
+	}
+	steps = append(steps, up)
 	switch c.Connector() {
 	case "filesystem":
 		steps = append(steps, "openarch app sync"+flag+"   (reads the folder; run it again after a change)")

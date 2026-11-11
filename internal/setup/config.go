@@ -59,9 +59,22 @@ type Config struct {
 	// CMIS is the URL of the CMIS source (CMIS_URL), or empty for no CMIS
 	// source. It is optional too. Its other settings are in .env.local.
 	CMIS string `yaml:"cmis,omitempty" json:"cmis,omitempty"`
+	// ExternalAlfresco is the URL of an existing Alfresco (ALFRESCO_URL) that
+	// replaces the bundled one, or empty. It is optional too. Its logins are in
+	// .env.local only.
+	ExternalAlfresco string `yaml:"externalAlfresco,omitempty" json:"externalAlfresco,omitempty"`
 	// BuiltContexts maps each build context variable, and "upstream", to the
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`
+}
+
+// Profile returns the upstream base profile of the setup: the one of its
+// sources, or alfresco-external with an existing Alfresco.
+func (c Config) Profile() string {
+	if c.ExternalAlfresco != "" {
+		return externalAlfrescoProfile
+	}
+	return c.Sources.Profile()
 }
 
 // Connector returns the upstream connector of the setup: "filesystem",
