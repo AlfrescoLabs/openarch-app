@@ -57,8 +57,10 @@ type composeConfig struct {
 // InspectAlfrescoProject reads the Compose project in dir with
 // 'docker compose config', which resolves its files, .env and profiles as the
 // user's own 'docker compose up' does.
-func InspectAlfrescoProject(ctx context.Context, env Env, dir string) (AlfrescoProject, error) {
-	out, err := env.Run(ctx, dir, nil, "docker", "compose", "config", "--format", "json")
+// files, when given, replace the files that Compose finds by itself, so the
+// plugin can read a project without its own override file.
+func InspectAlfrescoProject(ctx context.Context, env Env, dir string, files ...string) (AlfrescoProject, error) {
+	out, err := env.Run(ctx, dir, nil, "docker", append(composeArgsOf(files), "config", "--format", "json")...)
 	if err != nil {
 		return AlfrescoProject{}, output.Usage(fmt.Sprintf("cannot read the Compose project in %s: %v", dir, err), "Give the folder where you run 'docker compose up' for that Alfresco.")
 	}

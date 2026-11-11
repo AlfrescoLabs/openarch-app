@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -173,4 +175,176 @@ func EnsureSharedNetwork(ctx context.Context, env Env) error {
 		return output.NewError(output.ExitPrerequisite, "cannot create the Docker network "+SharedNetwork+": "+err.Error(), "")
 	}
 	return nil
+}
+
+// composeFiles are the file names that Compose finds by itself, in its order,
+// each with the override file that Compose merges into it.
+var composeFiles = []struct{ base, override string }{
+	{"compose.yaml", "compose.override.yaml"},
+	{"compose.yml", "compose.override.yml"},
+	{"docker-compose.yaml", "docker-compose.override.yaml"},
+	{"docker-compose.yml", "docker-compose.override.yml"},
+}
+
+// projectFiles returns the main file of the project in dir, the path of its
+// override file, and whether that override file is the plugin's own.
+func projectFiles(dir string) (base, override string, ours bool, err error) {
+	for _, f := range composeFiles {
+		if _, err := os.Stat(filepath.Join(dir, f.base)); err == nil {
+			override = filepath.Join(dir, f.override)
+			data, err := os.ReadFile(override)
+			return f.base, override, err == nil && strings.HasPrefix(string(data), OverrideHeader), nil
+		}
+	}
+	return "", "", false, output.Usage("no compose.yaml or docker-compose.yml in "+dir, "")
+}
+
+// PrepareOptions select what Prepare does.
+type PrepareOptions struct {
+	// Apply installs the override file in the project and recreates the
+	// changed services. Without it, Prepare changes nothing of the project.
+	Apply bool
+	// Confirm is asked before Apply changes the project.
+	Confirm func(project string) error
+}
+
+// PrepareResult is the outcome of Prepare.
+type PrepareResult struct {
+	Project  string   `json:"project"`
+	Override string   `json:"override"`
+	Images   []string `json:"images"`
+	Applied  bool     `json:"applied"`
+	Steps    []string `json:"steps,omitempty"`
+}
+
+// WriteText writes the human-readable form.
+func (r PrepareResult) WriteText(w io.Writer) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Built %s.\n", strings.Join(r.Images, " and "))
+	if r.Applied {
+		fmt.Fprintf(&b, "Installed %s and recreated the changed services of %s.\n", r.Override, r.Project)
+	} else {
+		fmt.Fprintf(&b, "Wrote %s. Nothing in %s changed.\n\nTo apply it (or run 'openarch app alfresco-prepare --apply'):\n", r.Override, r.Project)
+		for i, s := range r.Steps {
+			fmt.Fprintf(&b, "  %d. %s\n", i+1, s)
+		}
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// Prepare builds the images for the existing Alfresco project of the setup and
+// writes the override file that uses them. With opts.Apply it also installs
+// the file in the project and recreates the changed services. It replaces the
+// repository with the project image plus the module, and ACA with an ACA that
+// has the App for OpenArch extension.
+func Prepare(ctx context.Context, env Env, s Setup, opts PrepareOptions, st Streams) (PrepareResult, error) {
+	res := PrepareResult{Project: s.Config.AlfrescoCompose}
+	if s.Config.AlfrescoCompose == "" {
+		return res, output.Usage("the setup has no Alfresco Compose project", "Create the setup with 'openarch app init --alfresco-compose <dir>'.")
+	}
+	if err := s.CheckPins(); err != nil {
+		return res, err
+	}
+	base, override, ours, err := projectFiles(s.Config.AlfrescoCompose)
+	if err != nil {
+		return res, err
+	}
+	if opts.Apply && !ours {
+		if _, err := os.Stat(override); err == nil {
+			return res, output.Usage(override+" exists and is not from openarch-app", "Merge the changes by hand: run 'openarch app alfresco-prepare' without --apply.")
+		}
+	}
+	// Read the project without the plugin's own override, so a second run
+	// starts from the user's files again.
+	var files []string
+	if ours {
+		files = []string{base}
+	}
+	p, err := InspectAlfrescoProject(ctx, env, s.Config.AlfrescoCompose, files...)
+	if err != nil {
+		return res, err
+	}
+	values, err := s.env()
+	if err != nil {
+		return res, err
+	}
+	work := filepath.Join(s.Dir, "alfresco-prepare")
+	module, err := AlfrescoModule(ctx, env, s, work, st)
+	if err != nil {
+		return res, err
+	}
+	// The project image must exist; Compose builds it for a build service.
+	if _, err := env.Run(ctx, "", nil, "docker", "image", "inspect", p.RepositoryImage); err != nil {
+		if err := env.Stream(ctx, p.Dir, nil, st.Err, st.Err, "docker", append(composeArgsOf(files), "build", p.Repository)...); err != nil {
+			return res, output.NewError(output.ExitError, "cannot build "+p.Repository+" of "+p.Dir+": "+err.Error(), "")
+		}
+	}
+	dockerfile := fmt.Sprintf("FROM %s\nUSER root\nCOPY %s /usr/local/tomcat/webapps/alfresco/WEB-INF/lib/\nUSER alfresco\n", p.RepositoryImage, filepath.Base(module.JAR))
+	if err := writeFile(filepath.Join(work, "Dockerfile"), []byte(dockerfile), 0o644); err != nil {
+		return res, err
+	}
+	if err := env.Stream(ctx, work, nil, st.Err, st.Err, "docker", "build", "-t", RepositoryModuleImage(p), "."); err != nil {
+		return res, output.NewError(output.ExitError, "cannot build "+RepositoryModuleImage(p)+": "+err.Error(), "")
+	}
+	res.Images = append(res.Images, RepositoryModuleImage(p))
+	if p.ContentApp != "" && p.ACAVersion == "" {
+		return res, output.Usage("cannot tell the ACA version of "+p.ContentApp+" in "+p.Dir, "Give its image a version tag, for example alfresco/alfresco-content-app:8.0.0.")
+	}
+	if p.ContentApp != "" {
+		// The upstream Dockerfile of the extension clones ACA at ACA_TAG and
+		// builds it with the extension.
+		ui := values["CONTENT_LAKE_UI_GIT_CONTEXT"]
+		if err := env.Stream(ctx, s.Dir, nil, st.Err, st.Err, "docker", "build", "--build-arg", "ACA_TAG="+p.ACAVersion,
+			"-t", ContentAppImage(p), "-f", "docker/Dockerfile", ui); err != nil {
+			return res, output.NewError(output.ExitError, fmt.Sprintf("cannot build ACA %s with the App for OpenArch extension: %v", p.ACAVersion, err),
+				"The extension may not support this ACA version yet.")
+		}
+		res.Images = append(res.Images, ContentAppImage(p))
+	}
+	// The file holds the broker password of the project, as its own files do.
+	res.Override = filepath.Join(s.Dir, "alfresco-compose.override.yaml")
+	if err := writeFile(res.Override, renderProjectOverride(p, s.Dir), 0o600); err != nil {
+		return res, err
+	}
+	res.Steps = []string{
+		"Back up the Alfresco database and content store.",
+		"Copy " + res.Override + " to " + override + ".",
+		"Run 'docker compose up -d' in " + p.Dir + ". Compose recreates only the changed services.",
+		"Run 'openarch app up'.",
+	}
+	if !opts.Apply {
+		return res, nil
+	}
+	if opts.Confirm != nil {
+		if err := opts.Confirm(p.Dir); err != nil {
+			return res, err
+		}
+	}
+	if err := EnsureSharedNetwork(ctx, env); err != nil {
+		return res, err
+	}
+	data, err := os.ReadFile(res.Override)
+	if err != nil {
+		return res, err
+	}
+	if err := writeFile(override, data, 0o600); err != nil {
+		return res, err
+	}
+	if err := env.Stream(ctx, p.Dir, nil, st.Err, st.Err, "docker", "compose", "up", "-d", "--wait"); err != nil {
+		return res, output.NewError(output.ExitUnhealthy, "the Alfresco project did not start again: "+err.Error(),
+			"See 'docker compose logs' in "+p.Dir+". To undo, remove "+override+" and run 'docker compose up -d' there.")
+	}
+	res.Applied = true
+	res.Steps = nil
+	return res, nil
+}
+
+// composeArgsOf returns 'compose' with -f for each file.
+func composeArgsOf(files []string) []string {
+	args := []string{"compose"}
+	for _, f := range files {
+		args = append(args, "-f", f)
+	}
+	return args
 }
