@@ -65,7 +65,7 @@ const (
 // The upstream repository and the commit that every setup uses.
 const (
 	UpstreamURL = "https://github.com/AlfrescoLabs/content-lake-app-deployment.git"
-	UpstreamRef = "ef6b22e4b25f25257bd82fa50c9356036f2aaae4"
+	UpstreamRef = "4c580808474270095ffc38f03904bff78ee074f8"
 	// ProjectName replaces the fixed upstream Compose project name content-lake-app.
 	ProjectName = "openarch-app"
 )
@@ -78,6 +78,7 @@ var PreviousUpstreamRefs = []string{
 	"25b1e7c2b680b8468291750d92e363f746904a9d", // 0.2.0
 	"1a0f58791dd550058507b3cd9f7bc390025e214a", // 0.3.0
 	"66615041c84bda9565953a9285e0cbe03db7d01f", // 0.4.0
+	"ef6b22e4b25f25257bd82fa50c9356036f2aaae4", // 0.5.0 to 0.6.1
 }
 
 // KnownUpstream reports whether ref is the upstream commit of this release or
@@ -104,7 +105,7 @@ func (g GitContext) URL() string { return g.Repo + "#" + g.Ref }
 var GitContexts = []GitContext{
 	{"CONTENT_LAKE_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "fd220ce85c09749b88610dca6b3f6ce2605740b2"},
 	{"CONTENT_LAKE_ACS_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "fd220ce85c09749b88610dca6b3f6ce2605740b2"},
-	{"CONTENT_LAKE_UI_GIT_CONTEXT", "https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git", "e289a069a0078ed31247352118264eb2c4acd047"},
+	{"CONTENT_LAKE_UI_GIT_CONTEXT", "https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git", "3f9bde908494df648ae1303818bce22ea4a49eba"},
 	{"CONTENT_LAKE_APP_UI_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app-ui.git", "a6ddcbe1b68db6d7030e21a77844a8e848a7aed4"},
 }
 

@@ -94,7 +94,6 @@ func alfrescoSource(c *Config, path string) (map[string]string, error) {
 		// The stack has no bundled broker, so the transform engine works over
 		// HTTP only.
 		"TRANSFORM_ACTIVEMQ_URL": "false",
-		"INGESTION_FOLDER_1":     noIngestionFolder,
 	}
 	for k, v := range values {
 		if strings.ContainsRune(v, '\'') || strings.ContainsFunc(v, unicode.IsControl) {

@@ -40,7 +40,7 @@ stderr 'openarch app upgrade'
 
 -- external/openarch-app.yaml --
 schemaVersion: 2
-upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
+upstream: 4c580808474270095ffc38f03904bff78ee074f8
 alfresco: 1
 nuxeo: 0
 llmModel: ai/qwen2.5
@@ -52,7 +52,7 @@ externalAlfresco: http://host.docker.internal:8180
 schemaVersion: 9
 -- setup/openarch-app.yaml --
 schemaVersion: 2
-upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
+upstream: 4c580808474270095ffc38f03904bff78ee074f8
 alfresco: 1
 nuxeo: 0
 llmModel: ai/qwen2.5
@@ -62,7 +62,7 @@ context: app
 -- nuxeo/openarch-app.yaml --
 schemaVersion: 2
 managedNuxeo: true
-upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
+upstream: 4c580808474270095ffc38f03904bff78ee074f8
 alfresco: 1
 nuxeo: 1
 llmModel: ai/qwen2.5
@@ -71,7 +71,7 @@ bindIP: 127.0.0.1
 context: app
 -- v1/openarch-app.yaml --
 schemaVersion: 1
-upstream: ef6b22e4b25f25257bd82fa50c9356036f2aaae4
+upstream: 4c580808474270095ffc38f03904bff78ee074f8
 profile: full
 llmModel: ai/qwen2.5
 embeddingModel: ai/mxbai-embed-large

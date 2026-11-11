@@ -96,7 +96,7 @@ func TestRenderProjectOverride(t *testing.T) {
 		t.Errorf("indexer = %+v", idx)
 	}
 	aca := doc.Services["content-app"]
-	if aca.Image != "openarch-app/aca-extension:8.0.0" || aca.Restart != "unless-stopped" || aca.Environment["APP_CONFIG_RAG_URL"] != "http://"+proxyAlias ||
+	if aca.Image != "openarch-app/aca-extension:8.0.0" || aca.Restart != "" || aca.Environment["APP_CONFIG_RAG_URL"] != "http://"+proxyAlias ||
 		aca.Environment["APP_CONFIG_ECM_HOST"] != "http://alfresco:8080" {
 		t.Errorf("content-app = %+v", aca)
 	}
@@ -171,7 +171,7 @@ func TestAlfrescoStackValues(t *testing.T) {
 	v := alfrescoStackValues(fixtureProject(t), "admin", "pw")
 	for k, want := range map[string]string{"ALFRESCO_URL": "http://openarch-alfresco:8080", "ALFRESCO_PROXY_UPSTREAM": "openarch-alfresco:8080",
 		"ALFRESCO_EVENT_BROKER_URL": "tcp://openarch-activemq:61616", "ACTIVEMQ_USER": "admin", "ACTIVEMQ_PASSWORD": "test-secret",
-		"ALFRESCO_ADMIN_PASSWORD": "pw", "TRANSFORM_ACTIVEMQ_URL": "false", "INGESTION_FOLDER_1": noIngestionFolder} {
+		"ALFRESCO_ADMIN_PASSWORD": "pw", "TRANSFORM_ACTIVEMQ_URL": "false"} {
 		if v[k] != want {
 			t.Errorf("%s = %q, want %q", k, v[k], want)
 		}
@@ -205,7 +205,10 @@ func TestInitAlfrescoCompose(t *testing.T) {
 	}
 	// The stack services join the shared network, the proxy with its alias.
 	override := string(mustRead(t, filepath.Join(dir, OverrideFile)))
-	for _, want := range []string{"  rag-service:\n    networks:\n      openarch-app-alfresco: {}", "  proxy:\n    networks:\n      openarch-app-alfresco:\n        aliases: [openarch-app-proxy]",
+	for _, want := range []string{
+		"  batch-ingester:\n    environment:\n      INGESTION_FOLDER_1: \"openarch-app-no-default-folder\"\n    networks:\n      openarch-app-alfresco: {}",
+		"  rag-service:\n    environment:\n      RAG_SOURCE_LINKS_ALFRESCO_TEMPLATE: \"/#/search/(viewer:view/{nodeId})?location=%2Frag\"\n    networks:\n      openarch-app-alfresco: {}",
+		"  proxy:\n    networks:\n      openarch-app-alfresco:\n        aliases: [openarch-app-proxy]",
 		"networks:\n  openarch-app-alfresco:\n    external: true"} {
 		if !strings.Contains(override, want) {
 			t.Errorf("override lacks %q:\n%s", want, override)

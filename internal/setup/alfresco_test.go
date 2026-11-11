@@ -202,8 +202,22 @@ func TestAlfrescoModule(t *testing.T) {
 		}
 	}
 	steps := strings.Join(res.Steps, "\n")
-	if res.JAR != filepath.Join(out, "content-lake-repo-model-1.0.0.jar") || !strings.Contains(steps, "https://github.com/AlfrescoLabs/alfresco-content-lake-ui/tree/e289a06") ||
+	if res.JAR != filepath.Join(out, "content-lake-repo-model-1.0.0.jar") || !strings.Contains(steps, "https://github.com/AlfrescoLabs/alfresco-content-lake-ui/tree/") ||
 		!strings.Contains(res.Steps[len(res.Steps)-1], "alfresco-prepare --undo") {
 		t.Errorf("result = %+v", res)
+	}
+}
+
+func TestOverrideExistingAlfresco(t *testing.T) {
+	// --alfresco-env: no configured sync of the whole repository, and no
+	// shared network.
+	env := string(renderOverride(Config{Sources: stack.Sources{Alfresco: 1}, ExternalAlfresco: "http://alf:8080"}))
+	if !strings.Contains(env, "  batch-ingester:\n    environment:\n      INGESTION_FOLDER_1: \"openarch-app-no-default-folder\"\n") ||
+		strings.Contains(env, SharedNetwork) || strings.Contains(env, "RAG_SOURCE_LINKS") {
+		t.Errorf("--alfresco-env override:\n%s", env)
+	}
+	// The bundled Alfresco keeps the upstream defaults.
+	if bundled := string(renderOverride(Config{Sources: stack.Sources{Alfresco: 1}})); strings.Contains(bundled, "INGESTION_FOLDER_1") {
+		t.Errorf("bundled override:\n%s", bundled)
 	}
 }

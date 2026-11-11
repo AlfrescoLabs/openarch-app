@@ -34,6 +34,10 @@ const (
 	ProjectAssets = "openarch-app"
 	moduleFile    = "content-lake-repo-model.jar"
 	prefixesFile  = "reindex.prefixes-file.json"
+	// userACALinks is the link of an Alfresco source in an answer, for the
+	// user's own ACA served at / (the ACA 8 search viewer route). The
+	// upstream default opens the stack's ACA at /aca/.
+	userACALinks = "/#/search/(viewer:view/{nodeId})?location=%2Frag"
 	// noIngestionFolder is a folder id that no repository has. A configured
 	// sync skips a folder that it cannot find, so 'POST /api/sync/configured'
 	// syncs nothing instead of the upstream default -root-, the whole
@@ -67,7 +71,6 @@ func alfrescoStackValues(p AlfrescoProject, adminUser, adminPassword string) map
 		"ACTIVEMQ_USER":                           p.BrokerUser,
 		"ACTIVEMQ_PASSWORD":                       p.brokerPassword,
 		"TRANSFORM_ACTIVEMQ_URL":                  "false",
-		"INGESTION_FOLDER_1":                      noIngestionFolder,
 	}
 }
 
@@ -105,10 +108,9 @@ func renderProjectOverride(p AlfrescoProject) []byte {
 	}
 	if p.ContentApp != "" {
 		// The image has its own nginx, which forwards /alfresco/ to the
-		// repository and the App for OpenArch paths to the stack proxy. nginx
-		// resolves those names at startup and exits while the stack is down,
-		// so the container restarts until the stack proxy is there.
-		fmt.Fprintf(&b, "  %s:\n    image: %s\n    restart: unless-stopped\n    environment:\n      APP_CONFIG_ECM_HOST: %s\n      APP_CONFIG_RAG_URL: %s\n      APP_CONFIG_CONTENT_LAKE_URL: %s\n",
+		// repository and the App for OpenArch paths to the stack proxy. It
+		// looks the names up per request, so ACA runs while the stack is down.
+		fmt.Fprintf(&b, "  %s:\n    image: %s\n    environment:\n      APP_CONFIG_ECM_HOST: %s\n      APP_CONFIG_RAG_URL: %s\n      APP_CONFIG_CONTENT_LAKE_URL: %s\n",
 			p.ContentApp, quote(ContentAppImage(p)), quote("http://"+p.Repository+":8080"), quote("http://"+proxyAlias), quote("http://"+proxyAlias))
 		b.WriteString(p.networksBlock(p.ContentApp, ""))
 	}

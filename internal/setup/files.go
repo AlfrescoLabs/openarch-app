@@ -246,13 +246,20 @@ func renderOverride(c Config) []byte {
 	b.WriteString("    depends_on:\n      " + openArchVolumeInit + ":\n        condition: service_completed_successfully\n")
 	fmt.Fprintf(&b, "  %s:\n    image: %s\n    command: [\"chown\", \"33010:1000\", \"/data\"]\n", openArchVolumeInit, initImage)
 	b.WriteString("    network_mode: none\n    volumes:\n      - " + openArchVolume + ":/data\n")
-	if c.AlfrescoCompose != "" {
+	if c.ExternalAlfresco != "" {
 		// The clients of an existing Alfresco project reach it, and its ACA
-		// reaches the proxy, on the shared network.
-		for _, svc := range []string{"batch-ingester", "live-ingester", "rag-service"} {
-			fmt.Fprintf(&b, "  %s:\n    networks:\n      %s: {}\n", svc, SharedNetwork)
+		// reaches the proxy, on the shared network. These values are here,
+		// not in .env.local, so 'up' gives them to setups of older releases.
+		var networks, linkTemplate string
+		if c.AlfrescoCompose != "" {
+			networks = fmt.Sprintf("    networks:\n      %s: {}\n", SharedNetwork)
+			linkTemplate = fmt.Sprintf("    environment:\n      RAG_SOURCE_LINKS_ALFRESCO_TEMPLATE: %s\n", quote(userACALinks))
 		}
-		fmt.Fprintf(&b, "  proxy:\n    networks:\n      %s:\n        aliases: [%s]\n", SharedNetwork, proxyAlias)
+		fmt.Fprintf(&b, "  batch-ingester:\n    environment:\n      INGESTION_FOLDER_1: %s\n%s", quote(noIngestionFolder), networks)
+		if c.AlfrescoCompose != "" {
+			fmt.Fprintf(&b, "  live-ingester:\n%s  rag-service:\n%s%s", networks, linkTemplate, networks)
+			fmt.Fprintf(&b, "  proxy:\n    networks:\n      %s:\n        aliases: [%s]\n", SharedNetwork, proxyAlias)
+		}
 	}
 	b.WriteString("volumes:\n  " + openArchVolume + ":\n")
 	if c.AlfrescoCompose != "" {
