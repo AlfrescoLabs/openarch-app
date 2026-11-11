@@ -118,9 +118,9 @@ func ParseEnv(data []byte) map[string]string {
 var alfrescoNameKeys = []string{"ALFRESCO_1_DISPLAY_NAME", "ALFRESCO_2_DISPLAY_NAME"}
 
 // envValues returns the settings and secrets that init writes to .env.local,
-// with names as the names of the Alfresco sources and readers as the readers
-// of the filesystem source.
-func envValues(c Config, names, readers []string) (map[string]string, error) {
+// with names as the names of the Alfresco sources and source as the values of
+// the settings of the connector source.
+func envValues(c Config, names []string, source map[string]string) (map[string]string, error) {
 	v := map[string]string{
 		"BIND_IP":         c.BindIP,
 		"USE_HTTPS":       "false",
@@ -138,14 +138,12 @@ func envValues(c Config, names, readers []string) (map[string]string, error) {
 		// Single quotes, so Compose does not expand $demo_ui_upstream.
 		v["NGINX_ROOT_DIRECTIVE"] = "'" + stack.SampleUIRoot + "'"
 	}
-	if c.Filesystem != "" {
-		// Upstream has no sync account to keep, so it is random also with
-		// --default-secrets.
-		fs, err := filesystemValues(c, readers)
+	if c.Connector() != "" {
+		cv, err := connectorValues(c, source)
 		if err != nil {
 			return nil, err
 		}
-		for k, x := range fs {
+		for k, x := range cv {
 			v[k] = x
 		}
 	}

@@ -240,7 +240,7 @@ func TestMemoryByProfile(t *testing.T) {
 		f := newFake()
 		f.infoJSON = info(c.mem)
 		o := opts()
-		o.Filesystem = c.filesystem
+		o.Connector = c.filesystem
 		var err error
 		if o.Sources, err = stack.SourcesOf(c.profile, c.extras); err != nil {
 			t.Fatal(err)

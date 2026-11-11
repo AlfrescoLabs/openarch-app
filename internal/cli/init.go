@@ -1,18 +1,24 @@
 package cli
 
 import (
+	"bufio"
+	"errors"
+	"io"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/AlfrescoLabs/openarch-app/internal/output"
 	"github.com/AlfrescoLabs/openarch-app/internal/setup"
 	"github.com/AlfrescoLabs/openarch-app/internal/stack"
+	"github.com/AlfrescoLabs/openarch-app/internal/term"
 )
 
 func newInitCmd(app *App) *cobra.Command {
 	var sf sourceFlags
+	var cmisStdin bool
 	opts := setup.InitOptions{Settings: setup.Config{
 		LLMModel:       stack.DefaultLLMModel,
 		EmbeddingModel: stack.DefaultEmbeddingModel,
@@ -53,8 +59,19 @@ who can read its files, once for each user; a user logs in to Alfresco or
 Nuxeo, and the same user name counts for the files. Groups do not work for
 this source. --filesystem-everyone lets every user read the files instead.
 The sync API listens on port 9096 with a random account in .env.local.
---filesystem does not work with --alfresco 2 --sample-ui: that sample UI does
-not find the files.`,
+
+--cmis-env adds a CMIS 1.1 repository as a source, with the settings in a
+file of KEY=value lines: CMIS_URL (as the containers reach it, for example
+http://host.docker.internal:8080/...), CMIS_USERNAME, and any other CMIS_*,
+RAG_SECURITY_CMIS_* or CONNECTOR_ROOTS key. init copies them to .env.local and
+refuses other keys and CMIS_ACL_FALLBACK=public. The password is CMIS_PASSWORD
+in the file, or OPENARCH_APP_CMIS_PASSWORD, or the first line of stdin with
+--cmis-password-stdin, or a prompt. The readers of each document come from its
+CMIS permissions: users and everyone, not groups. 'openarch app sync' reads
+the repository.
+
+A setup has at most one of --filesystem and --cmis-env. Neither works with
+--alfresco 2 --sample-ui: that sample UI does not find their documents.`,
 		Example: `  openarch app init                            # one Alfresco
   openarch app init --alfresco 2               # two Alfresco instances
   openarch app init --alfresco 1 --nuxeo 1     # one Alfresco and one Nuxeo
@@ -79,6 +96,10 @@ not find the files.`,
 			if net.ParseIP(opts.Settings.BindIP) == nil {
 				return output.Usage("invalid --bind-ip "+opts.Settings.BindIP, "Use an IP address, such as 127.0.0.1 or 0.0.0.0.")
 			}
+			if cmisStdin && opts.CMISEnv == "" {
+				return output.Usage("--cmis-password-stdin needs --cmis-env", "")
+			}
+			opts.CMISPassword = app.cmisPassword(cmisStdin)
 			opts.OpenArchBin = os.Getenv(envBin)
 			res, err := setup.Init(cmd.Context(), app.setupEnv(), opts)
 			if err != nil {
@@ -99,8 +120,34 @@ not find the files.`,
 	f.StringVar(&s.Filesystem, "filesystem", "", "folder of this machine to add as a source, mounted read-only")
 	f.StringArrayVar(&opts.FilesystemReaders, "filesystem-reader", nil, "user who can read the files of --filesystem (repeatable)")
 	f.BoolVar(&opts.FilesystemEveryone, "filesystem-everyone", false, "let every user read the files of --filesystem")
+	f.StringVar(&opts.CMISEnv, "cmis-env", "", "file with the settings of a CMIS source (CMIS_URL, CMIS_USERNAME, ...)")
+	f.BoolVar(&cmisStdin, "cmis-password-stdin", false, "read the CMIS password from the first line of stdin")
 	f.BoolVar(&s.DefaultSecrets, "default-secrets", false, "keep the upstream secrets instead of random ones")
 	f.BoolVar(&s.DefaultUsers, "default-users", false, "keep the upstream OpenArch users (admin:password)")
 	f.BoolVar(&opts.Force, "force", false, "replace an openarch context with the same name")
 	return cmd
+}
+
+// envCMISPassword holds the CMIS password for init --cmis-env.
+const envCMISPassword = "OPENARCH_APP_CMIS_PASSWORD"
+
+// cmisPassword returns how init gets the CMIS password when the --cmis-env
+// file has none: the first line of stdin, the variable, or a prompt. It
+// returns nil when there is no way.
+func (a *App) cmisPassword(stdin bool) func() (string, error) {
+	switch {
+	case stdin:
+		return func() (string, error) {
+			line, err := bufio.NewReader(a.Streams.In).ReadString('\n')
+			if err != nil && !errors.Is(err, io.EOF) {
+				return "", err
+			}
+			return strings.TrimRight(line, "\r\n"), nil
+		}
+	case os.Getenv(envCMISPassword) != "":
+		return func() (string, error) { return os.Getenv(envCMISPassword), nil }
+	case a.Interactive():
+		return func() (string, error) { return term.ReadPassword(a.Streams.In, a.Streams.Err, "CMIS password: ") }
+	}
+	return nil
 }

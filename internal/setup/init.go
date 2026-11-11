@@ -87,6 +87,11 @@ type InitOptions struct {
 	// filesystem source. FilesystemEveryone lets every user read them.
 	FilesystemReaders  []string
 	FilesystemEveryone bool
+	// CMISEnv is a file with the settings of the CMIS source, or empty.
+	CMISEnv string
+	// CMISPassword returns the CMIS password when CMISEnv has none. Nil
+	// means that there is no other way to get it.
+	CMISPassword func() (string, error)
 }
 
 // DefaultAlfrescoNames are the names of the two Alfresco sources when init
@@ -138,6 +143,9 @@ func (r InitResult) WriteText(w io.Writer) error {
 	if r.Config.Filesystem != "" {
 		what += ", the folder " + r.Config.Filesystem
 	}
+	if r.Config.CMIS != "" {
+		what += ", CMIS " + r.Config.CMIS
+	}
 	if r.Config.SampleUI {
 		what += ", sample UI"
 	}
@@ -171,9 +179,17 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 	if err != nil {
 		return InitResult{}, err
 	}
-	readers, err := filesystemSource(&c, opts.FilesystemReaders, opts.FilesystemEveryone)
+	if err := checkConnector(c, opts.CMISEnv != ""); err != nil {
+		return InitResult{}, err
+	}
+	source, err := filesystemSource(&c, opts.FilesystemReaders, opts.FilesystemEveryone)
 	if err != nil {
 		return InitResult{}, err
+	}
+	if opts.CMISEnv != "" {
+		if source, err = cmisSource(&c, opts.CMISEnv, opts.CMISPassword); err != nil {
+			return InitResult{}, err
+		}
 	}
 	dir, err := filepath.Abs(opts.Dir)
 	if err != nil {
@@ -217,15 +233,15 @@ func Init(ctx context.Context, env Env, opts InitOptions) (InitResult, error) {
 		}
 	}
 
-	merged, reused, err := writeEnv(dir, &c, names, readers)
+	merged, reused, err := writeEnv(dir, &c, names, source)
 	if err != nil {
 		return res, err
 	}
 	if reused {
 		res.Reused = append(res.Reused, EnvFile)
 	}
-	if c.Filesystem != "" && merged[syncPasswordKey] == "" {
-		return res, output.Usage(fmt.Sprintf("the existing %s has no settings for the filesystem source", EnvFile), "Run init again without --filesystem, or in a new folder.")
+	if c.Connector() != "" && merged["CONNECTOR_SOURCE_TYPE"] != c.Connector() {
+		return res, output.Usage(fmt.Sprintf("the existing %s has no settings for the %s source", EnvFile, c.Connector()), "Run init again without it, or in a new folder.")
 	}
 	user, password := merged[adminUserKey], merged[adminPasswordKey]
 	if user == "" || password == "" {
@@ -270,8 +286,11 @@ func nextSteps(c Config, dir string) []string {
 		up += "   (the first start builds Nuxeo from source, which takes long)"
 	}
 	steps := []string{"openarch app models pull" + flag, up}
-	if c.Filesystem != "" {
+	switch c.Connector() {
+	case "filesystem":
 		steps = append(steps, "openarch app sync"+flag+"   (reads the folder; run it again after a change)")
+	case "cmis":
+		steps = append(steps, "openarch app sync"+flag+"   (reads the CMIS repository; run it again after a change)")
 	}
 	return steps
 }
@@ -343,13 +362,13 @@ func fetchPinned(ctx context.Context, env Env, dir string, r pinnedRepo, cmd str
 // writeEnv writes .env.local, or keeps an existing one, and returns the
 // upstream .env values with the .env.local values on top. An existing file
 // sets the bind IP in c, so the config matches what Compose will use.
-func writeEnv(dir string, c *Config, names, readers []string) (map[string]string, bool, error) {
+func writeEnv(dir string, c *Config, names []string, source map[string]string) (map[string]string, bool, error) {
 	path := filepath.Join(dir, EnvFile)
 	local, err := os.ReadFile(path)
 	reused := err == nil
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		values, err := envValues(*c, names, readers)
+		values, err := envValues(*c, names, source)
 		if err != nil {
 			return nil, false, err
 		}

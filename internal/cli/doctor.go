@@ -17,7 +17,7 @@ const envBin = "OPENARCH_BIN"
 
 func newDoctorCmd(app *App) *cobra.Command {
 	var sf sourceFlags
-	var sampleUI bool
+	var sampleUI, filesystem, cmis bool
 	opts := doctor.Options{
 		LLMModel:       stack.DefaultLLMModel,
 		EmbeddingModel: stack.DefaultEmbeddingModel,
@@ -42,7 +42,7 @@ The default ports are ` + ports(stack.HostPorts("alfresco", nil, false, false)) 
 ` + ports([]int{stack.NuxeoPort}) + ` (Nuxeo) with --nuxeo 1,
 ` + ports([]int{stack.Alfresco2Port, stack.Alfresco2HTTPSPort}) + ` (the second Alfresco) with --alfresco 2, and
 ` + ports([]int{stack.SampleUIPort}) + ` (the sample UI) with --sample-ui, and
-` + ports([]int{stack.ConnectorPort}) + ` (the sync API of the filesystem source) with --filesystem.
+` + ports([]int{stack.ConnectorPort}) + ` (the sync API of a connector source) with --filesystem or --cmis.
 The memory thresholds are estimates.`,
 		Example: `  openarch app doctor
   openarch app doctor --alfresco 2 --nuxeo 1 --dir ./my-app
@@ -55,8 +55,9 @@ The memory thresholds are estimates.`,
 				return err
 			}
 			opts.Sources = sources
+			opts.Connector = filesystem || cmis
 			if len(opts.Ports) == 0 {
-				opts.Ports = stack.HostPorts(sources.Profile(), sources.Extras(), sampleUI, opts.Filesystem)
+				opts.Ports = stack.HostPorts(sources.Profile(), sources.Extras(), sampleUI, filesystem || cmis)
 			}
 			opts.OpenArchBin = os.Getenv(envBin)
 			report, err := doctor.Run(cmd.Context(), app.doctorEnv(), opts)
@@ -78,7 +79,8 @@ The memory thresholds are estimates.`,
 	f.StringVar(&opts.EmbeddingModel, "embedding-model", opts.EmbeddingModel, "embedding model in Docker Model Runner")
 	f.StringVar(&opts.ModelURL, "model-url", opts.ModelURL, "Docker Model Runner API, as seen from this machine")
 	f.BoolVar(&sampleUI, "sample-ui", false, "check the port of the sample UI too")
-	f.BoolVar(&opts.Filesystem, "filesystem", false, "check the port and memory of the filesystem source too")
+	f.BoolVar(&filesystem, "filesystem", false, "check the port and memory of the filesystem source too")
+	f.BoolVar(&cmis, "cmis", false, "check the port and memory of the CMIS source too")
 	f.StringVar(&opts.Dir, "dir", opts.Dir, "setup folder (nuxeo-deployment goes inside it)")
 	f.IntSliceVar(&opts.Ports, "port", nil, "host port that must be free (repeatable, replaces the default ports)")
 	f.StringSliceVar(&opts.Only, "check", nil, "run only this check (repeatable)")

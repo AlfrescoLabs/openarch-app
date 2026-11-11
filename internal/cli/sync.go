@@ -12,11 +12,11 @@ func newSyncCmd(app *App) *cobra.Command {
 	opts := setup.SyncOptions{Timeout: 1800}
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Read the folder of the filesystem source into App for OpenArch",
-		Long: `Start a sync of the filesystem source (init --filesystem) and wait until it
-ends. The sync reads every file of the folder, and the stack makes the
-embeddings of new and changed files. Nothing syncs by itself: run sync again
-after the files change.
+		Short: "Read the filesystem or CMIS source into App for OpenArch",
+		Long: `Start a sync of the connector source (init --filesystem or --cmis-env) and
+wait until it ends. The sync reads every file of the folder or every document
+of the CMIS repository, and the stack makes the embeddings of new and changed
+ones. Nothing syncs by itself: run sync again after a change.
 
 sync calls the sync API of the running stack on port 9096, with the account in
 .env.local. It prints the counts of the job. Exit code 4 means the job failed,

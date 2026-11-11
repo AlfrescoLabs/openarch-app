@@ -23,7 +23,7 @@ func ComposeArgs(c Config) []string {
 	for _, e := range c.Extras() {
 		args = append(args, "--profile", e)
 	}
-	if c.Filesystem != "" {
+	if c.Connector() != "" {
 		args = append(args, "--profile", stack.ConnectorProfile)
 	}
 	if c.SampleUI {

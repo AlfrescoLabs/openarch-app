@@ -83,9 +83,24 @@ openarch app up
 openarch app sync
 ```
 
-`--filesystem` does not work with `--alfresco 2 --sample-ui`, because that sample UI does not find the files.
+`--cmis-env` adds a CMIS 1.1 repository as a source. The file holds `KEY=value` lines: `CMIS_URL` as the containers reach it, `CMIS_USERNAME`, and any other `CMIS_*`, `RAG_SECURITY_CMIS_*` or `CONNECTOR_ROOTS` key of upstream. `init` refuses other keys and `CMIS_ACL_FALLBACK=public`. The password is `CMIS_PASSWORD` in the file, or the variable `OPENARCH_APP_CMIS_PASSWORD`, or the first line of stdin with `--cmis-password-stdin`, or a prompt:
 
-`doctor` takes the same flags, and `--filesystem` there has no folder: it adds the port and memory of the filesystem source. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
+```sh
+cat > cmis.env <<'EOF'
+CMIS_URL=http://host.docker.internal:8080/alfresco/api/-default-/public/cmis/versions/1.1/browser
+CMIS_USERNAME=reader
+CMIS_ROOT_PATH=/Sites/sales/documentLibrary
+EOF
+openarch app init --cmis-env cmis.env
+openarch app up
+openarch app sync
+```
+
+The readers of each document come from its CMIS permissions. Users and everyone count, groups do not: the RAG service does not look up groups for this source.
+
+A setup has at most one of `--filesystem` and `--cmis-env`. Neither works with `--alfresco 2 --sample-ui`, because that sample UI does not find their documents.
+
+`doctor` takes the same flags. There, `--filesystem` and `--cmis` take no value: they add the port and memory of the source. With Nuxeo, `init` also fetches [nuxeo-deployment](https://github.com/aborroy/nuxeo-deployment), and Nuxeo runs in the same stack. Its first `up` builds Nuxeo from source, which takes long. The Nuxeo admin is still `Administrator`/`Administrator`.
 
 After an update of `openarch-app` that pins a newer upstream commit, `up` refuses the setup until it is upgraded. There is no way back, so back up the volumes first:
 

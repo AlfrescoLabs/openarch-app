@@ -54,8 +54,9 @@ type Options struct {
 	// Sources are the Alfresco and Nuxeo instances. They set the memory
 	// threshold and whether the nuxeo-deployment check runs.
 	Sources stack.Sources
-	// Filesystem adds the filesystem source to the memory threshold.
-	Filesystem     bool
+	// Connector adds a connector source (filesystem or CMIS) to the memory
+	// threshold.
+	Connector      bool
 	LLMModel       string
 	EmbeddingModel string
 	// ModelURL is Docker Model Runner as seen from the host.

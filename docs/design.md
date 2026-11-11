@@ -58,7 +58,7 @@ openarch-app/
   nuxeo-deployment/       # nuxeo-deployment at its pinned commit, only with Nuxeo
 ```
 
-- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), and the commits of the last build. It holds no secrets.
+- `openarch-app.yaml` is the source of truth for settings: `schemaVersion: 2`, the sources (`alfresco` and `nuxeo`, the number of instances), the models, the bind IP, the name of the `openarch` context, whether the plugin manages nuxeo-deployment (`managedNuxeo`), whether the setup runs the sample UI (`sampleUI`), the folder of the filesystem source (`filesystem`), the URL of the CMIS source (`cmis`), and the commits of the last build. It holds no secrets.
 - `up` writes `compose.override.yaml` again on every start, so a setup made by an older build gets the current file.
 - `init` writes `openarch-app.yaml` last. If `init` fails, running it again keeps `upstream/` and `.env.local`. Generated files never go inside `upstream/`.
 - `openarch-users.yml` holds only hashes. Its mode is 0644 so that the OpenArch container (user `openarch-user`, uid 33010) can read it through a bind mount on Linux.
@@ -75,7 +75,7 @@ docker compose -p openarch-app --project-directory upstream \
 
 - `-p openarch-app` replaces the fixed upstream name `content-lake-app`. There is one setup per machine.
 - `.env.local` comes after the upstream `.env`, so its values win.
-- The upstream profile and extras follow from the sources (see Sources). The second Alfresco adds `-f upstream/compose.alfresco-2.yaml` and `--profile alfresco-2`, a managed Nuxeo adds `-f upstream/compose.nuxeo-deployment.yaml`, the filesystem source adds `--profile connector` (see Filesystem source), and the sample UI adds `--profile platform` (see Sample UI).
+- The upstream profile and extras follow from the sources (see Sources). The second Alfresco adds `-f upstream/compose.alfresco-2.yaml` and `--profile alfresco-2`, a managed Nuxeo adds `-f upstream/compose.nuxeo-deployment.yaml`, a filesystem or CMIS source adds `--profile connector` (see Filesystem source and CMIS source), and the sample UI adds `--profile platform` (see Sample UI).
 - Compose resolves relative paths in every file against the project directory, `upstream/`. So `compose.override.yaml` refers to its neighbors with `../` paths, for example `../openarch-users.yml`.
 - Hyland OpenArch keeps its blobs, the embeddings included, in `/deployments/nxserver/data`, and upstream gives that folder no volume. A recreated container would lose them while MongoDB and OpenSearch keep the metadata, and the next permission change would then delete the embeddings. So `compose.override.yaml` adds the volume `hxpr-data`, and a one-shot service `hxpr-data-init` gives it to the OpenArch user (uid 33010) before OpenArch starts: OpenArch cannot write to a volume owned by root.
 
@@ -144,13 +144,13 @@ A plugin release can pin a newer upstream commit and newer build contexts. `open
 | Command | Built | What it does |
 | --- | --- | --- |
 | `version` | yes | Prints the version. |
-| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the sources, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 with Nuxeo; 8082 and 8445 with a second Alfresco; 4200 with `--sample-ui`; 9096 with `--filesystem`, which also adds memory), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
+| `doctor` | yes | Checks the prerequisites: Docker, Compose, Docker memory for the sources, Docker Model Runner and its URL, the models, free ports (80, 443 and 8090; 8081 with Nuxeo; 8082 and 8445 with a second Alfresco; 4200 with `--sample-ui`; 9096 with `--filesystem` or `--cmis`, which also add memory), the `nuxeo-deployment` folder when it already exists, and `openarch` 0.5.2 or later (the first release that removes `OPENARCH_PASSWORD` from the environment of plugins). `--dir` is the setup folder, which may not exist yet. |
 | `init [dir]` | yes | Creates the setup folder, fetches upstream (and nuxeo-deployment with Nuxeo), writes the generated files, and adds the `openarch` context (with `--no-verify`, because the stack is not running yet). It prints the next commands: `models pull` and `up`. |
 | `up`, `down`, `status`, `logs` | yes | Run `docker compose up -d --wait`, `down`, `ps` and `logs` with the upstream profile and extras of the sources in `openarch-app.yaml`. `up` warns when a model is missing, fails early when nuxeo-deployment is missing, and prints the endpoints. `down` keeps the volumes. `status` exits with code 4 when a service is not healthy. In JSON mode `logs` returns the logs as one field and does not follow them. |
 | `models pull` | yes | Pulls an `ai/` model with `docker model pull`. Builds the default chat model with the upstream `scripts/package-olmo3-local.sh`. Leaves any other model alone. |
 | `upgrade` | yes | Moves the setup to the upstream commit and build contexts of the binary (see Upgrades). |
 | `smoke-test` | yes | Runs the upstream suite of the sources against the running stack: `test/test-alfresco.sh`, `test/test-nuxeo.sh`, or `test/test-rag-full.sh` for `full` (it covers both sources). These are the suites of the upstream `test/run-tests.sh`; `test/smoke-test.sh` is a check for a demo host and wants the demo UI at `/`. It runs from the setup folder, never from `upstream/`. |
-| `sync` | yes | Starts a sync of the filesystem source and waits for the job (see Filesystem source). Exit code 4 means the job failed, a file failed, or the job still runs after `--timeout`. |
+| `sync` | yes | Starts a sync of the filesystem or CMIS source and waits for the job (see Filesystem source). Exit code 4 means the job failed, a file failed, or the job still runs after `--timeout`. |
 
 Flags of `init`:
 
@@ -167,6 +167,8 @@ Flags of `init`:
 | `--filesystem` | none | Folder of this machine to add as a source (see Filesystem source) |
 | `--filesystem-reader` | none | User who can read the files of `--filesystem`, repeatable |
 | `--filesystem-everyone` | off | Every user can read the files of `--filesystem` |
+| `--cmis-env` | none | File with the settings of a CMIS source (see CMIS source) |
+| `--cmis-password-stdin` | off | Read the CMIS password from the first line of stdin |
 | `--default-secrets` | off | Keep the upstream secrets |
 | `--default-users` | off | Keep the upstream OpenArch users (`admin:password`) and `HXPR_PASSWORD` |
 | `--force` | off | Replace an existing context with the same name |
@@ -213,6 +215,17 @@ With two Alfresco instances, `rag-service` lists the sources by name. `init` wri
 - With two Alfresco instances, the sample UI sends one login for each Alfresco source and none for the filesystem source, so the RAG service finds no files for it. `init` refuses `--filesystem` with `--alfresco 2 --sample-ui`.
 - The ingester has no schedule. A sync runs only when its API is called (`POST /api/sync/configured` on port 9096, with the sync account). `openarch app sync` makes that call, then reads `GET /api/sync/status/<job>` until the job ends, and prints the counts. `up` does not sync.
 - `filesystem` is an optional field of `openarch-app.yaml`, like `sampleUI`, so `schemaVersion` stays 2. The folder and the readers are chosen at `init` only. One setup has at most one filesystem source.
+
+## CMIS source
+
+`--cmis-env <file>` on `init` adds a CMIS 1.1 repository as a source. Upstream reads it with its shipped CMIS connector, in the same `plugin-batch-ingester` as the filesystem source. Upstream runs one connector in a setup, so `init` refuses `--cmis-env` together with `--filesystem`. The rest works as for the filesystem source: `--profile connector`, the sync account, port 9096 on `BIND_IP`, `openarch app sync`, and no sync without it.
+
+- The file has `KEY=value` lines. `init` copies only the keys `CMIS_*` (the settings of the connector), `RAG_SECURITY_CMIS_*` (a caller login against the CMIS repository, which the RAG service tries after Alfresco and Nuxeo) and `CONNECTOR_ROOTS`. It refuses any other key, so the file cannot change a secret or a port of the stack. It writes each value to `.env.local` in single quotes, so Compose does not expand a `$`, and it refuses a value with a single quote.
+- `CMIS_URL` and `CMIS_USERNAME` are required. `CMIS_URL` is resolved inside the stack, so `init` refuses `localhost` and `127.*`. It also refuses a URL with a login, because `openarch-app.yaml` stores the URL.
+- `init` refuses `CMIS_ACL_FALLBACK=public`. With it, every user would read a document whose permissions the repository cannot report. The upstream default is `fail-closed`.
+- The password is never a flag value (Rule 6). It is `CMIS_PASSWORD` in the file, or the variable `OPENARCH_APP_CMIS_PASSWORD`, or the first line of stdin with `--cmis-password-stdin`, or a prompt in an interactive terminal.
+- The connector takes the readers of each document from its CMIS permissions, and maps the "anyone" principal of the repository to everyone. The RAG service looks up no groups for a CMIS source, so a document that only a group can read is found by nobody.
+- `cmis` (the URL) is an optional field of `openarch-app.yaml`, so `schemaVersion` stays 2. The other settings are in `.env.local` only.
 
 ## Limits
 

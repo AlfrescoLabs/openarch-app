@@ -14,9 +14,9 @@ cd setup
 ! exec openarch-app logs --follow -o json
 stdout '--follow does not work with --output json'
 
-# sync needs the filesystem source.
+# sync needs a filesystem or CMIS source.
 ! exec openarch-app sync
-stderr 'the setup has no filesystem source'
+stderr 'the setup has no filesystem or CMIS source'
 stderr 'openarch app init --filesystem <folder> --filesystem-reader <user>'
 
 # A setup with Nuxeo needs nuxeo-deployment before compose runs. init fetched

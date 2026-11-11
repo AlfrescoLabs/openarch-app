@@ -101,8 +101,8 @@ func (s Setup) Endpoints() []Endpoint {
 	if s.Config.Alfresco >= 2 {
 		e = append(e, Endpoint{"Second Alfresco (alfresco-2)", fmt.Sprintf("%s:%d/", base, stack.Alfresco2Port)})
 	}
-	if s.Config.Filesystem != "" {
-		e = append(e, Endpoint{"Filesystem sync API (openarch app sync)", fmt.Sprintf("%s:%d/api/sync/", base, stack.ConnectorPort)})
+	if s.Config.Connector() != "" {
+		e = append(e, Endpoint{"Sync API of the " + s.Config.Connector() + " source (openarch app sync)", fmt.Sprintf("%s:%d/api/sync/", base, stack.ConnectorPort)})
 	}
 	return e
 }

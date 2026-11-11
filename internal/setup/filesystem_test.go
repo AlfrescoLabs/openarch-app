@@ -41,8 +41,6 @@ func TestFilesystemSource(t *testing.T) {
 		{"missing folder", Config{Filesystem: filepath.Join(folder, "none")}, []string{"jim"}, false, "is not a folder"},
 		{"file", Config{Filesystem: file}, []string{"jim"}, false, "is not a folder"},
 		{"quote", Config{Filesystem: folder + "/it's"}, []string{"jim"}, false, "invalid --filesystem"},
-		{"two Alfresco and the sample UI", Config{Sources: stack.Sources{Alfresco: 2}, SampleUI: true, Filesystem: folder}, []string{"jim"}, false, "does not work with --alfresco 2 --sample-ui"},
-		{"two Alfresco", Config{Sources: stack.Sources{Alfresco: 2}, Filesystem: folder}, []string{"jim"}, false, ""},
 		{"readers", Config{Filesystem: folder}, []string{"jim", "dwight@northgate.example"}, false, ""},
 		{"everyone", Config{Filesystem: folder}, nil, true, ""},
 	} {
@@ -53,8 +51,10 @@ func TestFilesystemSource(t *testing.T) {
 			t.Errorf("%s: %v", c.name, err)
 		case c.want != "" && (output.CodeOf(err) != output.ExitUsage || !strings.Contains(err.Error(), c.want)):
 			t.Errorf("%s: %v, want %q", c.name, err, c.want)
-		case c.want == "" && strings.Join(got, ",") != strings.Join(c.readers, ","):
-			t.Errorf("%s: readers %v", c.name, got)
+		case c.want == "" && c.config.Filesystem != "" && (got[readersKey] != strings.Join(c.readers, ",") || got["CONNECTOR_HOST_PATH"] != "'"+folder+"'"):
+			t.Errorf("%s: values %v", c.name, got)
+		case c.want == "" && c.config.Filesystem == "" && got != nil:
+			t.Errorf("%s: values %v without a folder", c.name, got)
 		}
 	}
 
@@ -66,9 +66,28 @@ func TestFilesystemSource(t *testing.T) {
 	}
 }
 
+func TestCheckConnector(t *testing.T) {
+	for _, c := range []struct {
+		config Config
+		want   string
+	}{
+		{Config{Sources: stack.Sources{Alfresco: 2}, SampleUI: true, Filesystem: "/data"}, "--filesystem does not work with --alfresco 2 --sample-ui"},
+		{Config{Sources: stack.Sources{Alfresco: 2}, SampleUI: true, CMIS: "http://cmis"}, "--cmis-env does not work with --alfresco 2 --sample-ui"},
+		{Config{Sources: stack.Sources{Alfresco: 1}, Filesystem: "/data", CMIS: "http://cmis"}, "cannot be combined"},
+		{Config{Sources: stack.Sources{Alfresco: 2}, Filesystem: "/data"}, ""},
+		{Config{Sources: stack.Sources{Alfresco: 2}, SampleUI: true}, ""},
+		{Config{Sources: stack.Sources{Alfresco: 1, Nuxeo: 1}, SampleUI: true, CMIS: "http://cmis"}, ""},
+	} {
+		err := checkConnector(c.config, false)
+		if (c.want == "" && err != nil) || (c.want != "" && (output.CodeOf(err) != output.ExitUsage || !strings.Contains(err.Error(), c.want))) {
+			t.Errorf("%+v: %v, want %q", c.config, err, c.want)
+		}
+	}
+}
+
 func TestEnvValuesFilesystem(t *testing.T) {
 	c := Config{BindIP: "0.0.0.0", Filesystem: "/data/shared docs", DefaultSecrets: true}
-	v, err := envValues(c, nil, []string{"jim", "dwight"})
+	v, err := envValues(c, nil, map[string]string{"CONNECTOR_HOST_PATH": "'/data/shared docs'", readersKey: "jim,dwight"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,10 +109,6 @@ func TestEnvValuesFilesystem(t *testing.T) {
 	}
 	if got := ParseEnv(renderEnv(v)); got["CONNECTOR_HOST_PATH"] != "/data/shared docs" {
 		t.Errorf("CONNECTOR_HOST_PATH reads back as %q", got["CONNECTOR_HOST_PATH"])
-	}
-	// Everyone is an empty list.
-	if v, err = envValues(c, nil, nil); err != nil || v[readersKey] != "" {
-		t.Errorf("everyone: %q, %v", v[readersKey], err)
 	}
 	if v, err = envValues(Config{BindIP: "127.0.0.1"}, nil, nil); err != nil || v["CONNECTOR_SOURCE_TYPE"] != "" || v[syncPasswordKey] != "" {
 		t.Errorf("no filesystem: %v, %v", v, err)
@@ -203,7 +218,7 @@ func TestSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.OK || res.JobID != "j1" || res.Discovered != 3 || res.Synced != 2 || res.Skipped != 1 || res.Folder != "/data" {
+	if !res.OK || res.JobID != "j1" || res.Discovered != 3 || res.Synced != 2 || res.Skipped != 1 || res.Source != "/data" {
 		t.Errorf("result = %+v", res)
 	}
 	want := []string{
@@ -250,7 +265,7 @@ func TestSyncErrors(t *testing.T) {
 	}
 	// A setup without the filesystem source.
 	plain := newSetup(t, Config{Sources: srcOf("alfresco"), Context: "app"})
-	if _, err := Sync(context.Background(), Env{}, plain, opts); output.CodeOf(err) != output.ExitUsage {
+	if _, err := Sync(context.Background(), Env{}, plain, opts); output.CodeOf(err) != output.ExitUsage || !strings.Contains(err.Error(), "no filesystem or CMIS source") {
 		t.Errorf("no filesystem: %v", err)
 	}
 }

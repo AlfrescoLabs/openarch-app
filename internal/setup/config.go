@@ -56,9 +56,24 @@ type Config struct {
 	// Filesystem is the absolute path of the folder that the filesystem source
 	// reads, or empty for no filesystem source. It is optional too.
 	Filesystem string `yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
+	// CMIS is the URL of the CMIS source (CMIS_URL), or empty for no CMIS
+	// source. It is optional too. Its other settings are in .env.local.
+	CMIS string `yaml:"cmis,omitempty" json:"cmis,omitempty"`
 	// BuiltContexts maps each build context variable, and "upstream", to the
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`
+}
+
+// Connector returns the upstream connector of the setup: "filesystem",
+// "cmis", or empty for none. plugin-batch-ingester runs it.
+func (c Config) Connector() string {
+	switch {
+	case c.Filesystem != "":
+		return "filesystem"
+	case c.CMIS != "":
+		return "cmis"
+	}
+	return ""
 }
 
 // Load reads openarch-app.yaml from the setup folder dir. A file of an older

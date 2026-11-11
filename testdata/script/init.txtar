@@ -42,6 +42,24 @@ stderr '--filesystem missing is not a folder'
 stderr '--filesystem does not work with --alfresco 2 --sample-ui'
 ! exists openarch-app
 
+# --cmis-env copies only CMIS keys, refuses a public fallback, and needs a
+# password that is never a flag value.
+! exec openarch-app init --cmis-env cmis-other.env
+stderr 'keys that init does not copy: HXPR_PASSWORD'
+! exec openarch-app init --cmis-env cmis-public.env
+stderr 'CMIS_ACL_FALLBACK=public is refused'
+! exec openarch-app init --cmis-env cmis.env
+stderr 'the CMIS password is missing'
+stderr 'OPENARCH_APP_CMIS_PASSWORD'
+stdin empty.txt
+! exec openarch-app init --cmis-env cmis.env --cmis-password-stdin
+stderr 'the CMIS password is empty'
+! exec openarch-app init --cmis-password-stdin
+stderr '--cmis-password-stdin needs --cmis-env'
+! exec openarch-app init --cmis-env cmis.env --filesystem shared --filesystem-everyone
+stderr '--filesystem and --cmis-env cannot be combined'
+! exists openarch-app
+
 ! exec openarch-app init --bind-ip localhost
 stderr 'invalid --bind-ip localhost'
 
@@ -60,5 +78,17 @@ stderr 'the openarch context "app" already exists'
 stderr 'Use --context-name with another name, or --force to replace it.'
 ! exists fresh
 
+-- cmis.env --
+CMIS_URL=http://host.docker.internal:8080/alfresco/api/-default-/public/cmis/versions/1.1/browser
+CMIS_USERNAME=reader
+-- cmis-other.env --
+CMIS_URL=http://cmis.example/browser
+HXPR_PASSWORD=x
+-- cmis-public.env --
+CMIS_URL=http://cmis.example/browser
+CMIS_USERNAME=reader
+CMIS_PASSWORD=p
+CMIS_ACL_FALLBACK=public
+-- empty.txt --
 -- done/openarch-app.yaml --
 schemaVersion: 1
