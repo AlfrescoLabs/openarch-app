@@ -16,7 +16,7 @@ In development. Every command of the first version works: `doctor`, `init`, `mod
 Download the archive for your system from the [releases page](https://github.com/AlfrescoLabs/openarch-app/releases): Linux, macOS and Windows, on amd64 or arm64. Put `openarch-app` on your `PATH`, next to `openarch` (the CLI for OpenArch, 0.5.2 or later).
 
 ```sh
-VERSION=0.6.4
+VERSION=0.7.0
 OS=linux        # or darwin, windows
 ARCH=amd64      # or arm64
 curl -LO "https://github.com/AlfrescoLabs/openarch-app/releases/download/v$VERSION/openarch-app_${VERSION}_${OS}_${ARCH}.tar.gz"
