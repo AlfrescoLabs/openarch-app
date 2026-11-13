@@ -100,11 +100,11 @@ type GitContext struct {
 // URL returns the context URL with the pinned commit as fragment.
 func (g GitContext) URL() string { return g.Repo + "#" + g.Ref }
 
-// GitContexts are the remote build contexts, pinned to the commits of their
-// main branches at the time of UpstreamRef.
+// GitContexts are the remote build contexts, pinned to commits of their main
+// branches that work with UpstreamRef.
 var GitContexts = []GitContext{
-	{"CONTENT_LAKE_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "fd220ce85c09749b88610dca6b3f6ce2605740b2"},
-	{"CONTENT_LAKE_ACS_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "fd220ce85c09749b88610dca6b3f6ce2605740b2"},
+	{"CONTENT_LAKE_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "4b1423ff988d0db8a303a7fe51746c836ebab7b3"},
+	{"CONTENT_LAKE_ACS_GIT_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app.git", "4b1423ff988d0db8a303a7fe51746c836ebab7b3"},
 	{"CONTENT_LAKE_UI_GIT_CONTEXT", "https://github.com/AlfrescoLabs/alfresco-content-lake-ui.git", "3f9bde908494df648ae1303818bce22ea4a49eba"},
 	{"CONTENT_LAKE_APP_UI_CONTEXT", "https://github.com/AlfrescoLabs/content-lake-app-ui.git", "a6ddcbe1b68db6d7030e21a77844a8e848a7aed4"},
 }

@@ -242,6 +242,42 @@ func TestUpgradeResumes(t *testing.T) {
 	}
 }
 
+// A release that moves only a build context keeps the upstream commit: the
+// upgrade rewrites .env.local, fetches nothing, and the next 'up' builds.
+func TestUpgradeMovesOnlyTheContexts(t *testing.T) {
+	built := map[string]string{builtUpstreamKey: stack.UpstreamRef}
+	local := "BIND_IP=127.0.0.1\n"
+	for _, g := range stack.GitContexts {
+		built[g.Var] = oldRef
+		local += g.Var + "=" + g.Repo + "#" + oldRef + "\n"
+	}
+	s := newSetup(t, Config{Upstream: stack.UpstreamRef, Sources: srcOf("alfresco"), Context: "app", BuiltContexts: built})
+	if err := os.WriteFile(filepath.Join(s.Dir, EnvFile), []byte(local), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f := newFakeUpgrade()
+	f.heads[UpstreamDir] = stack.UpstreamRef
+	res, err := Upgrade(context.Background(), f.env(), s, UpgradeOptions{})
+	if err != nil || !res.Changed || res.From != res.To {
+		t.Fatalf("%+v, %v", res, err)
+	}
+	for _, c := range f.calls {
+		if strings.Contains(c, "fetch") {
+			t.Errorf("fetched: %s", c)
+		}
+	}
+	s, err = Open(s.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckPins(); err != nil {
+		t.Errorf("after upgrade: %v", err)
+	}
+	if !s.NeedsBuild() {
+		t.Error("the next up does not build the new contexts")
+	}
+}
+
 func TestUpgradeNuxeoWarning(t *testing.T) {
 	withPreviousRef(t)
 	s := oldSetup(t, "full")
