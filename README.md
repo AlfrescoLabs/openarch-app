@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > **Not an official Hyland product.** openarch-app, App for OpenArch and the CLI for OpenArch are not Hyland OpenArch. They are in the [AlfrescoLabs](https://github.com/AlfrescoLabs) organization on GitHub because Hyland does not officially support them. Hyland OpenArch itself is at [github.com/hyland/OpenArch](https://github.com/hyland/OpenArch).
 
-A plugin for the [CLI for OpenArch](https://github.com/AlfrescoLabs/openarch-cli) to install and operate App for OpenArch with Docker Compose. App for OpenArch adds Alfresco and Nuxeo ingesters, a RAG service and a UI to Hyland OpenArch. It runs with local models on Docker Model Runner.
+A plugin for the [CLI for OpenArch](https://github.com/AlfrescoLabs/openarch-cli) to install and operate App for OpenArch with Docker Compose. App for OpenArch adds Alfresco and Nuxeo ingesters, a RAG service and a UI to Hyland OpenArch. It runs with local models on Docker Model Runner, or on another OpenAI-compatible model server such as Ollama or llama.cpp.
 
 The plugin wraps the upstream [content-lake-app-deployment](https://github.com/AlfrescoLabs/content-lake-app-deployment) repository at a pinned commit.
 
@@ -56,6 +56,36 @@ openarch app down
 `doctor` checks Docker, Docker Compose, Docker memory for the sources, Git, Docker Model Runner and its models, free ports, and the CLI for OpenArch 0.5.2 or later.
 
 `init` creates the setup folder `./openarch-app`: it fetches upstream at the pinned commit with Git, writes random secrets to `.env.local`, and adds an `openarch` context named `app` for the bundled Hyland OpenArch. `up` builds the images on the first start, waits until every service is healthy, and prints the endpoints. `down` keeps the data.
+
+`--model-url` uses another OpenAI-compatible model server instead of Docker Model Runner, such as Ollama or llama.cpp. Give its URL as this machine sees it, without a path (the services add `/v1`), and name the models as that server knows them. The embedding model must make vectors of 1024 dimensions, such as `mxbai-embed-large`: Hyland OpenArch searches only vectors of that size, so with a smaller model the documents are stored but every search fails.
+
+```sh
+ollama pull mxbai-embed-large
+ollama pull qwen2.5
+openarch app doctor --model-url http://localhost:11434 --embedding-model mxbai-embed-large --llm-model qwen2.5
+openarch app init --model-url http://localhost:11434 --embedding-model mxbai-embed-large --llm-model qwen2.5
+```
+
+With `--model-url`, `doctor` asks the server instead of `docker model`: its model list, and one embedding, to check the 1024 dimensions. `models pull` and the model check of `up` leave the models to you. The services reach a server on this machine at `host.docker.internal`. Docker Desktop forwards that to `localhost`; without Docker Desktop, on Linux, the server must also listen on the Docker bridge, for example with `OLLAMA_HOST=0.0.0.0` for Ollama.
+
+llama.cpp serves both models from one URL in router mode, with embeddings turned on for the embedding model:
+
+```ini
+# presets.ini
+[mxbai-embed-large]
+model = /path/to/mxbai-embed-large.gguf
+embeddings = true
+
+[qwen2.5]
+model = /path/to/qwen2.5.gguf
+```
+
+```sh
+llama-server --models-preset presets.ini --port 8085
+openarch app init --model-url http://localhost:8085 --embedding-model mxbai-embed-large --llm-model qwen2.5
+```
+
+The checks were tested with llama.cpp 0.7.0 on macOS with Docker Desktop. Ollama and Linux are not tested yet.
 
 `--alfresco` and `--nuxeo` say how many instances of each source the setup runs (default: one Alfresco). A setup has at most two Alfresco instances and one Nuxeo:
 

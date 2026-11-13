@@ -127,6 +127,10 @@ func envValues(c Config, names []string, source map[string]string) (map[string]s
 		"LLM_MODEL":       c.LLMModel,
 		"EMBEDDING_MODEL": c.EmbeddingModel,
 	}
+	if !c.UsesModelRunner() {
+		// The services reach a server on this machine at host.docker.internal.
+		v["MODEL_RUNNER_URL"] = stack.ContainerModelURL(c.ModelURL)
+	}
 	for _, g := range stack.GitContexts {
 		v[g.Var] = g.URL()
 	}

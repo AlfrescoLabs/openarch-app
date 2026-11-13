@@ -31,6 +31,10 @@ func newDoctorCmd(app *App) *cobra.Command {
 Docker memory for the sources, Git, Docker Model Runner and its models, free
 ports, the nuxeo-deployment folder when it exists, and the CLI for OpenArch.
 
+With --model-url for another OpenAI-compatible model server, such as Ollama,
+the model checks ask that server instead of 'docker model': its model list at
+/v1/models, and one embedding, which must have 1024 dimensions.
+
 Each check reports ok, warn, fail or skip, and a fix when something is wrong.
 Exit code 3 means at least one check failed. Warnings do not change the exit code.
 
@@ -47,7 +51,9 @@ The memory thresholds are estimates.`,
 		Example: `  openarch app doctor
   openarch app doctor --alfresco 2 --nuxeo 1 --dir ./my-app
   openarch app doctor --llm-model ai/qwen2.5 --output json
-  openarch app doctor --check model.runner --check model.chat`,
+  openarch app doctor --check model.runner --check model.chat
+  openarch app doctor --model-url http://localhost:11434 \
+    --embedding-model mxbai-embed-large --llm-model qwen2.5   # Ollama`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			sources, err := sf.sources(cmd, app.Printer)
@@ -75,9 +81,9 @@ The memory thresholds are estimates.`,
 	}
 	addSourceFlags(cmd, &sf)
 	f := cmd.Flags()
-	f.StringVar(&opts.LLMModel, "llm-model", opts.LLMModel, "chat model in Docker Model Runner")
-	f.StringVar(&opts.EmbeddingModel, "embedding-model", opts.EmbeddingModel, "embedding model in Docker Model Runner")
-	f.StringVar(&opts.ModelURL, "model-url", opts.ModelURL, "Docker Model Runner API, as seen from this machine")
+	f.StringVar(&opts.LLMModel, "llm-model", opts.LLMModel, "chat model, in Docker Model Runner or in the --model-url server")
+	f.StringVar(&opts.EmbeddingModel, "embedding-model", opts.EmbeddingModel, "embedding model (1024 dimensions), in Docker Model Runner or in the --model-url server")
+	f.StringVar(&opts.ModelURL, "model-url", opts.ModelURL, "model server as seen from this machine: Docker Model Runner, or another OpenAI-compatible server such as Ollama")
 	f.BoolVar(&sampleUI, "sample-ui", false, "check the port of the sample UI too")
 	f.BoolVar(&filesystem, "filesystem", false, "check the port and memory of the filesystem source too")
 	f.BoolVar(&cmis, "cmis", false, "check the port and memory of the CMIS source too")

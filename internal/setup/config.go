@@ -42,6 +42,10 @@ type Config struct {
 	stack.Sources  `yaml:",inline"`
 	LLMModel       string `yaml:"llmModel" json:"llmModel"`
 	EmbeddingModel string `yaml:"embeddingModel" json:"embeddingModel"`
+	// ModelURL is an OpenAI-compatible model server other than Docker Model
+	// Runner, such as Ollama, as seen from this machine. Empty means Docker
+	// Model Runner. It is optional, so a file without it keeps schemaVersion 2.
+	ModelURL       string `yaml:"modelURL,omitempty" json:"modelURL,omitempty"`
 	BindIP         string `yaml:"bindIP" json:"bindIP"`
 	Context        string `yaml:"context" json:"context"`
 	DefaultSecrets bool   `yaml:"defaultSecrets,omitempty" json:"defaultSecrets,omitempty"`
@@ -71,6 +75,10 @@ type Config struct {
 	// commit of the last build, so that 'up' knows when to rebuild.
 	BuiltContexts map[string]string `yaml:"builtContexts,omitempty" json:"builtContexts,omitempty"`
 }
+
+// UsesModelRunner reports whether the models come from Docker Model Runner,
+// so that the plugin can check and pull them with 'docker model'.
+func (c Config) UsesModelRunner() bool { return c.ModelURL == "" }
 
 // Profile returns the upstream base profile of the setup: the one of its
 // sources, or alfresco-external with an existing Alfresco.

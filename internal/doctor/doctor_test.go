@@ -3,10 +3,12 @@ package doctor
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -32,6 +34,11 @@ type fake struct {
 	dirs        map[string]bool
 	openarchOut string
 	calls       []string
+	// served are the models that a --model-url server lists, and dims the size
+	// of its embeddings. serverDown makes it unreachable.
+	served     []string
+	dims       int
+	serverDown bool
 }
 
 func newFake() *fake {
@@ -43,6 +50,8 @@ func newFake() *fake {
 		modelStatus: 200,
 		dirs:        map[string]bool{},
 		openarchOut: `{"version": "0.5.2"}`,
+		served:      []string{"mxbai-embed-large:latest", "qwen2.5:latest"},
+		dims:        1024,
 	}
 }
 
@@ -107,6 +116,27 @@ func (f *fake) env() Env {
 				return 0, errors.New("dial tcp 127.0.0.1:12434: connect: connection refused")
 			}
 			return f.modelStatus, nil
+		},
+		HTTPJSON: func(_ context.Context, url string, body []byte) (int, []byte, error) {
+			f.calls = append(f.calls, "http "+url)
+			if f.serverDown {
+				return 0, nil, errors.New("connection refused")
+			}
+			if strings.HasSuffix(url, "/v1/models") {
+				var data []map[string]string
+				for _, m := range f.served {
+					data = append(data, map[string]string{"id": m})
+				}
+				b, _ := json.Marshal(map[string]any{"data": data})
+				return 200, b, nil
+			}
+			var req struct{ Model string }
+			_ = json.Unmarshal(body, &req)
+			if !slices.ContainsFunc(f.served, func(m string) bool { return stack.SameModel(m, req.Model) }) {
+				return 404, []byte(`{"error":"model not found"}`), nil
+			}
+			b, _ := json.Marshal(map[string]any{"data": []map[string]any{{"embedding": make([]float64, f.dims)}}})
+			return 200, b, nil
 		},
 		Stat: func(name string) (os.FileInfo, error) {
 			if f.dirs[name] {
@@ -410,5 +440,59 @@ func TestWriteText(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
+	}
+}
+
+// ollama returns options for a setup whose models come from Ollama.
+func ollama() Options {
+	o := opts()
+	o.ModelURL = "http://localhost:11434"
+	o.EmbeddingModel = "mxbai-embed-large"
+	o.LLMModel = "qwen2.5"
+	return o
+}
+
+func TestModelServer(t *testing.T) {
+	f := newFake()
+	f.noRunner = true // not needed: nothing may call 'docker model'
+	r := run(t, f, ollama())
+	st := status(r)
+	if st["model.runner"] != Skip || st["model.url"] != OK || st["model.embedding"] != OK || st["model.chat"] != OK {
+		t.Errorf("status = %v", st)
+	}
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "docker model") {
+			t.Errorf("called %s", c)
+		}
+	}
+	if !strings.Contains(find(t, r, "model.embedding").Message, "1024 dimensions") {
+		t.Errorf("embedding = %+v", find(t, r, "model.embedding"))
+	}
+}
+
+func TestModelServerSmallEmbeddings(t *testing.T) {
+	f := newFake()
+	f.dims = 768
+	res := find(t, run(t, f, ollama()), "model.embedding")
+	if res.Status != Fail || !strings.Contains(res.Message, "768 dimensions") || !strings.Contains(res.Fix, "1024") {
+		t.Errorf("embedding = %+v", res)
+	}
+}
+
+func TestModelServerMissingModel(t *testing.T) {
+	f := newFake()
+	f.served = []string{"mxbai-embed-large:latest"}
+	res := find(t, run(t, f, ollama()), "model.chat")
+	if res.Status != Fail || !strings.Contains(res.Fix, "ollama pull qwen2.5") {
+		t.Errorf("chat = %+v", res)
+	}
+}
+
+func TestModelServerDown(t *testing.T) {
+	f := newFake()
+	f.serverDown = true
+	st := status(run(t, f, ollama()))
+	if st["model.url"] != Fail || st["model.embedding"] != Skip || st["model.chat"] != Skip {
+		t.Errorf("status = %v", st)
 	}
 }

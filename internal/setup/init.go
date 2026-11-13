@@ -316,6 +316,10 @@ func nextSteps(c Config, dir string) []string {
 		up += "   (the first start builds Nuxeo from source, which takes long)"
 	}
 	steps := []string{"openarch app models pull" + flag}
+	if !c.UsesModelRunner() {
+		steps = []string{fmt.Sprintf("openarch app doctor --model-url %s --embedding-model %s --llm-model %s --check model.url --check model.embedding --check model.chat",
+			c.ModelURL, c.EmbeddingModel, c.LLMModel)}
+	}
 	switch {
 	case c.AlfrescoCompose != "":
 		steps = append(steps, "openarch app alfresco-prepare"+flag+"   (shows the changes for the Alfresco project; --apply makes them)")

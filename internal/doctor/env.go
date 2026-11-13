@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -20,7 +21,10 @@ type Env struct {
 	PortFree func(ctx context.Context, port int) bool
 	// HTTPStatus returns the status code of a GET request, or an error if no response arrived.
 	HTTPStatus func(ctx context.Context, url string) (int, error)
-	Stat       func(name string) (os.FileInfo, error)
+	// HTTPJSON sends a JSON request (a GET when body is nil) and returns the
+	// status code and the response body.
+	HTTPJSON func(ctx context.Context, url string, body []byte) (int, []byte, error)
+	Stat     func(name string) (os.FileInfo, error)
 }
 
 // SystemEnv returns an Env backed by the real system.
@@ -31,6 +35,7 @@ func SystemEnv() Env {
 		Run:        runCommand,
 		PortFree:   portFree,
 		HTTPStatus: httpStatus,
+		HTTPJSON:   httpJSON,
 		Stat:       os.Stat,
 	}
 }
@@ -60,6 +65,28 @@ func portFree(ctx context.Context, port int) bool {
 	}
 	_ = l.Close()
 	return true
+}
+
+func httpJSON(ctx context.Context, url string, body []byte) (int, []byte, error) {
+	// An embedding can load the model first, which takes a while.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	method, reader := http.MethodGet, io.Reader(http.NoBody)
+	if body != nil {
+		method, reader = http.MethodPost, bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, reader)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	return resp.StatusCode, data, err
 }
 
 func httpStatus(ctx context.Context, url string) (int, error) {

@@ -19,6 +19,7 @@ import (
 func newInitCmd(app *App) *cobra.Command {
 	var sf sourceFlags
 	var cmisStdin, alfrescoStdin bool
+	var modelURL string
 	opts := setup.InitOptions{Settings: setup.Config{
 		LLMModel:       stack.DefaultLLMModel,
 		EmbeddingModel: stack.DefaultEmbeddingModel,
@@ -100,7 +101,9 @@ changes for that project, and makes them with --apply.`,
     --filesystem-reader jim --filesystem-reader dwight
   openarch app init --alfresco-env alfresco.env   # an Alfresco you already run
   openarch app init --alfresco-compose ~/alfresco  # the same, on Docker Compose
-  openarch app init ./my-app --llm-model ai/qwen2.5 --output json`,
+  openarch app init ./my-app --llm-model ai/qwen2.5 --output json
+  openarch app init --model-url http://localhost:11434 \
+    --embedding-model mxbai-embed-large --llm-model qwen2.5   # Ollama`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Dir = defaultSetupDir
@@ -112,6 +115,18 @@ changes for that project, and makes them with --apply.`,
 				return err
 			}
 			opts.Settings.Sources = sources
+			if modelURL != "" && strings.TrimSuffix(modelURL, "/") != stack.DefaultModelURL {
+				if err := stack.ValidateModelURL(modelURL); err != nil {
+					return err
+				}
+				// The default model names are Docker Model Runner names.
+				if !cmd.Flags().Changed("llm-model") || !cmd.Flags().Changed("embedding-model") {
+					return output.Usage("--model-url needs --llm-model and --embedding-model",
+						"Name the models as the server knows them, for example --embedding-model mxbai-embed-large --llm-model qwen2.5 for Ollama. "+
+							"The embedding model must make vectors of 1024 dimensions.")
+				}
+				opts.Settings.ModelURL = strings.TrimSuffix(modelURL, "/")
+			}
 			if net.ParseIP(opts.Settings.BindIP) == nil {
 				return output.Usage("invalid --bind-ip "+opts.Settings.BindIP, "Use an IP address, such as 127.0.0.1 or 0.0.0.0.")
 			}
@@ -137,8 +152,9 @@ changes for that project, and makes them with --apply.`,
 	addSourceFlags(cmd, &sf)
 	f := cmd.Flags()
 	s := &opts.Settings
-	f.StringVar(&s.LLMModel, "llm-model", s.LLMModel, "chat model in Docker Model Runner")
-	f.StringVar(&s.EmbeddingModel, "embedding-model", s.EmbeddingModel, "embedding model in Docker Model Runner")
+	f.StringVar(&s.LLMModel, "llm-model", s.LLMModel, "chat model, in Docker Model Runner or in the --model-url server")
+	f.StringVar(&s.EmbeddingModel, "embedding-model", s.EmbeddingModel, "embedding model (1024 dimensions), in Docker Model Runner or in the --model-url server")
+	f.StringVar(&modelURL, "model-url", "", "OpenAI-compatible model server instead of Docker Model Runner, such as Ollama at http://localhost:11434, as seen from this machine")
 	f.StringVar(&s.BindIP, "bind-ip", s.BindIP, "host address of every published port")
 	f.StringVar(&s.Context, "context-name", s.Context, "name of the openarch context for the bundled Hyland OpenArch")
 	f.BoolVar(&s.SampleUI, "sample-ui", false, "add the sample UI, served by the proxy at /")

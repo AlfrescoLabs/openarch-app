@@ -355,3 +355,29 @@ func TestMissingModels(t *testing.T) {
 		t.Errorf("missing = %v", got)
 	}
 }
+
+// A setup with another model server leaves 'docker model' alone: doctor checks
+// the server, and the user gets the models in it.
+func TestModelServerSetup(t *testing.T) {
+	c := Config{EmbeddingModel: "mxbai-embed-large", LLMModel: "qwen2.5", ModelURL: "http://localhost:11434"}
+	s := newSetup(t, c)
+	f := &fakeDocker{}
+	if got := s.MissingModels(context.Background(), f.env()); got != nil || len(f.calls) != 0 {
+		t.Errorf("missing = %v, calls %q", got, f.calls)
+	}
+	_, err := ModelsPull(context.Background(), f.env(), s, Streams{Err: io.Discard})
+	var e *output.Error
+	if !errors.As(err, &e) || e.Code != output.ExitUsage || !strings.Contains(e.Hint, "ollama pull mxbai-embed-large") || len(f.calls) != 0 {
+		t.Errorf("err = %v, calls %q", err, f.calls)
+	}
+	v, err := envValues(c, nil, nil)
+	if err != nil || v["MODEL_RUNNER_URL"] != "http://host.docker.internal:11434" {
+		t.Errorf("MODEL_RUNNER_URL = %q, %v", v["MODEL_RUNNER_URL"], err)
+	}
+	if v, _ := envValues(Config{}, nil, nil); v["MODEL_RUNNER_URL"] != "" {
+		t.Errorf("Docker Model Runner keeps the upstream MODEL_RUNNER_URL, got %q", v["MODEL_RUNNER_URL"])
+	}
+	if got := nextSteps(c, "openarch-app")[0]; !strings.Contains(got, "openarch app doctor --model-url http://localhost:11434 --embedding-model mxbai-embed-large") {
+		t.Errorf("first step = %q", got)
+	}
+}

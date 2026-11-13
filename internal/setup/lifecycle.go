@@ -205,8 +205,11 @@ func (s Setup) UsesUpstreamAlfrescoAdmin() bool {
 }
 
 // MissingModels returns the configured models that Docker Model Runner does
-// not have.
+// not have. A setup with another model server returns none: 'doctor' checks it.
 func (s Setup) MissingModels(ctx context.Context, env Env) []string {
+	if !s.Config.UsesModelRunner() {
+		return nil
+	}
 	var missing []string
 	for _, m := range []string{s.Config.EmbeddingModel, s.Config.LLMModel} {
 		if _, err := env.Run(ctx, s.Dir, nil, "docker", "model", "inspect", m); err != nil {
@@ -479,6 +482,11 @@ func (r ModelsResult) WriteText(w io.Writer) error {
 // it. Any other model is left alone: something else serves it.
 func ModelsPull(ctx context.Context, env Env, s Setup, st Streams) (ModelsResult, error) {
 	var res ModelsResult
+	if !s.Config.UsesModelRunner() {
+		return res, output.Usage("the models of this setup come from "+s.Config.ModelURL+", not from Docker Model Runner",
+			fmt.Sprintf("Get %s and %s in that server, for example 'ollama pull %s' for Ollama. Then run 'openarch app doctor --model-url %s'.",
+				s.Config.EmbeddingModel, s.Config.LLMModel, s.Config.EmbeddingModel, s.Config.ModelURL))
+	}
 	for _, m := range []string{s.Config.EmbeddingModel, s.Config.LLMModel} {
 		if slices.ContainsFunc(res.Models, func(r ModelResult) bool { return r.Model == m }) {
 			continue

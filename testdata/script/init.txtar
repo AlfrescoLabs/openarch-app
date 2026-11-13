@@ -18,6 +18,17 @@ stderr 'the alfresco-2 extra needs the alfresco or full profile'
 ! exec openarch-app init --profile full --nuxeo 1
 stderr '--profile and --extra cannot be combined with --alfresco and --nuxeo'
 
+# --model-url is a bare URL, and it needs the model names of that server.
+! exec openarch-app init --model-url localhost:11434 --embedding-model e --llm-model c
+stderr 'invalid --model-url'
+! exec openarch-app init --model-url http://localhost:11434/v1 --embedding-model e --llm-model c
+stderr 'has a path'
+stderr 'the services add /v1 themselves'
+! exec openarch-app init --model-url http://localhost:11434
+stderr '--model-url needs --llm-model and --embedding-model'
+stderr '1024 dimensions'
+! exists openarch-app
+
 # --alfresco-name needs two Alfresco instances, and one name for each.
 ! exec openarch-app init --alfresco-name Branch
 stderr '--alfresco-name needs --alfresco 2'

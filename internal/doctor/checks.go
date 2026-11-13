@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -65,6 +67,10 @@ type state struct {
 
 	runnerDone bool
 	runnerErr  error
+
+	modelsDone bool
+	models     []string
+	modelsErr  error
 }
 
 func (s *state) dockerCLI() (string, error) {
@@ -215,7 +221,16 @@ func checkGit(_ context.Context, s *state) Result {
 	return Result{Status: OK, Message: "found " + path}
 }
 
+// modelServer reports whether --model-url names a server other than Docker
+// Model Runner. Then the checks use its OpenAI-compatible API, not 'docker model'.
+func (s *state) modelServer() bool {
+	return strings.TrimSuffix(s.opts.ModelURL, "/") != stack.DefaultModelURL
+}
+
 func checkModelRunner(ctx context.Context, s *state) Result {
+	if s.modelServer() {
+		return skipped("--model-url is another model server")
+	}
 	if _, err := s.dockerCLI(); err != nil {
 		return skipped("docker CLI is missing")
 	}
@@ -230,6 +245,13 @@ func checkModelRunner(ctx context.Context, s *state) Result {
 }
 
 func checkModelURL(ctx context.Context, s *state) Result {
+	if s.modelServer() {
+		models, err := s.serverModels(ctx)
+		if err != nil {
+			return Result{Status: Fail, Message: err.Error(), Fix: "Start the model server, or check --model-url."}
+		}
+		return Result{Status: OK, Message: fmt.Sprintf("%s answers with %d models", s.modelsURL(), len(models))}
+	}
 	url := strings.TrimSuffix(s.opts.ModelURL, "/") + "/engines/v1/models"
 	code, err := s.env.HTTPStatus(ctx, url)
 	if err != nil {
@@ -246,6 +268,20 @@ func checkModelURL(ctx context.Context, s *state) Result {
 func modelCheck(name func(Options) string) func(context.Context, *state) Result {
 	return func(ctx context.Context, s *state) Result {
 		model := name(s.opts)
+		if s.modelServer() {
+			models, err := s.serverModels(ctx)
+			if err != nil {
+				return skipped("the model server does not answer")
+			}
+			if !slices.ContainsFunc(models, func(m string) bool { return stack.SameModel(m, model) }) {
+				return Result{Status: Fail, Message: model + " is not in " + s.modelsURL(),
+					Fix: "Get it in the model server, for example 'ollama pull " + model + "' for Ollama."}
+			}
+			if model == s.opts.EmbeddingModel {
+				return checkEmbeddingSize(ctx, s, model)
+			}
+			return Result{Status: OK, Message: model + " is served"}
+		}
 		if err := s.modelRunner(ctx); err != nil {
 			return skipped("Docker Model Runner is not available")
 		}
@@ -364,4 +400,68 @@ func skipped(reason string) Result {
 func firstLine(b []byte) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
 	return strings.TrimSpace(line)
+}
+
+// modelsURL is the model list of the --model-url server. The services use the
+// same /v1 API.
+func (s *state) modelsURL() string { return strings.TrimSuffix(s.opts.ModelURL, "/") + "/v1/models" }
+
+// serverModels returns the ids of the models that the --model-url server lists.
+func (s *state) serverModels(ctx context.Context) ([]string, error) {
+	if !s.modelsDone {
+		s.modelsDone = true
+		code, body, err := s.env.HTTPJSON(ctx, s.modelsURL(), nil)
+		switch {
+		case err != nil:
+			s.modelsErr = fmt.Errorf("cannot reach %s: %w", s.modelsURL(), err)
+		case code != http.StatusOK:
+			s.modelsErr = fmt.Errorf("%s returned HTTP %d", s.modelsURL(), code)
+		default:
+			var r struct {
+				Data []struct {
+					ID string `json:"id"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(body, &r); err != nil {
+				s.modelsErr = fmt.Errorf("%s: not an OpenAI-compatible model list: %w", s.modelsURL(), err)
+				break
+			}
+			for _, m := range r.Data {
+				s.models = append(s.models, m.ID)
+			}
+		}
+	}
+	return s.models, s.modelsErr
+}
+
+// checkEmbeddingSize makes one embedding: Hyland OpenArch searches only
+// vectors of 1024 dimensions. A smaller model stores vectors, and then every
+// search fails.
+func checkEmbeddingSize(ctx context.Context, s *state, model string) Result {
+	url := strings.TrimSuffix(s.opts.ModelURL, "/") + "/v1/embeddings"
+	req, err := json.Marshal(map[string]any{"model": model, "input": []string{"dimension check"}})
+	if err != nil {
+		return Result{Status: Fail, Message: err.Error()}
+	}
+	code, body, err := s.env.HTTPJSON(ctx, url, req)
+	if err != nil || code != http.StatusOK {
+		msg := fmt.Sprintf("%s returned HTTP %d for %s", url, code, model)
+		if err != nil {
+			msg = fmt.Sprintf("cannot reach %s: %v", url, err)
+		}
+		return Result{Status: Fail, Message: msg, Fix: "Check that the server makes embeddings with " + model + "."}
+	}
+	var r struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil || len(r.Data) == 0 {
+		return Result{Status: Fail, Message: url + " returned no embedding for " + model}
+	}
+	if n := len(r.Data[0].Embedding); n != stack.RequiredEmbeddingDimension {
+		return Result{Status: Fail, Message: fmt.Sprintf("%s makes vectors of %d dimensions; Hyland OpenArch searches only %d", model, n, stack.RequiredEmbeddingDimension),
+			Fix: "Use a model with 1024 dimensions, such as mxbai-embed-large. With fewer, documents are stored but every search fails."}
+	}
+	return Result{Status: OK, Message: fmt.Sprintf("%s is served and makes vectors of %d dimensions", model, stack.RequiredEmbeddingDimension)}
 }
