@@ -383,7 +383,9 @@ func fetchPinned(ctx context.Context, env Env, dir string, r pinnedRepo, cmd str
 	steps := [][]string{
 		{"-c", "init.defaultBranch=main", "init", "-q", tmp},
 		{"-C", tmp, "fetch", "-q", "--depth", "1", r.URL, r.Ref},
-		{"-C", tmp, "checkout", "-q", "--detach", "FETCH_HEAD"},
+		// Git for Windows defaults to core.autocrlf=true, which turns the
+		// upstream shell scripts into CRLF files that bash cannot run.
+		{"-C", tmp, "-c", "core.autocrlf=false", "checkout", "-q", "--detach", "FETCH_HEAD"},
 	}
 	for _, args := range steps {
 		if _, err := env.Run(ctx, dir, nil, "git", args...); err != nil {

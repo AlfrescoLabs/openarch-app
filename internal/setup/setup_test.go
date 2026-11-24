@@ -451,6 +451,26 @@ func TestInitWrongCheckout(t *testing.T) {
 	}
 }
 
+func TestInitCheckoutKeepsLineEndings(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "setup")
+	f := &fakeSystem{}
+	if _, err := Init(context.Background(), f.env(), initOpts(dir)); err != nil {
+		t.Fatal(err)
+	}
+	checkouts := 0
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "git ") && strings.Contains(c, " checkout ") {
+			checkouts++
+			if !strings.Contains(c, "-c core.autocrlf=false checkout") {
+				t.Errorf("checkout without core.autocrlf=false: %s", c)
+			}
+		}
+	}
+	if checkouts == 0 {
+		t.Error("no git checkout call")
+	}
+}
+
 func TestInitFetchFails(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "setup")
 	f := &fakeSystem{fetchFails: true}
