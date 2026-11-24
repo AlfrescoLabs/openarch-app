@@ -74,3 +74,51 @@ release:
   draft: true
   prerelease: auto
   name_template: "openarch-app {{ .Version }}"
+
+# goreleaser writes the cask and the manifest to dist/ only (skip_upload): GitHub
+# refuses pushes to the tap and the bucket from GitHub-hosted runners. The
+# release workflow keeps both files as a run artifact, and
+# scripts/publish-packages.sh pushes them after the release is published.
+# Both depend on the openarch package, so one command installs the CLI and the
+# plugin.
+homebrew_casks:
+  - name: openarch-app
+    repository:
+      owner: AlfrescoLabs
+      name: homebrew-tap
+      branch: main
+    directory: Casks
+    skip_upload: true
+    commit_author:
+      name: Angel Borroy
+      email: angel.fernandoborroy@hyland.com
+    commit_msg_template: "openarch-app {{ .Version }}"
+    homepage: https://github.com/AlfrescoLabs/openarch-app
+    description: Unofficial plugin of the CLI for OpenArch that installs and runs App for OpenArch
+    license: Apache-2.0
+    dependencies:
+      - cask: alfrescolabs/tap/openarch
+    # The binaries have no Apple signature, so macOS would block a quarantined file.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/openarch-app"]
+          end
+
+scoops:
+  - name: openarch-app
+    repository:
+      owner: AlfrescoLabs
+      name: scoop-bucket
+      branch: main
+    skip_upload: true
+    commit_author:
+      name: Angel Borroy
+      email: angel.fernandoborroy@hyland.com
+    commit_msg_template: "openarch-app {{ .Version }}"
+    homepage: https://github.com/AlfrescoLabs/openarch-app
+    description: Unofficial plugin of the CLI for OpenArch that installs and runs App for OpenArch
+    license: Apache-2.0
+    depends:
+      - alfrescolabs/openarch

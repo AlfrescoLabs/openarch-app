@@ -13,7 +13,18 @@ In development. Every command of the first version works: `doctor`, `init`, `mod
 
 ## Install
 
-Download the archive for your system from the [releases page](https://github.com/AlfrescoLabs/openarch-app/releases): Linux, macOS and Windows, on amd64 or arm64. Put `openarch-app` on your `PATH`, next to `openarch` (the CLI for OpenArch, 0.5.2 or later).
+With Homebrew (macOS and Linux) or Scoop (Windows). Both also install `openarch`, the CLI for OpenArch:
+
+```sh
+brew install AlfrescoLabs/tap/openarch-app
+
+scoop bucket add alfrescolabs https://github.com/AlfrescoLabs/scoop-bucket
+scoop install openarch-app
+```
+
+Check it with `openarch plugin list` and `openarch app version`. Update later with `brew upgrade openarch-app` or `scoop update openarch-app`.
+
+Without a package manager, download the archive for your system from the [releases page](https://github.com/AlfrescoLabs/openarch-app/releases): Linux, macOS and Windows, on amd64 or arm64. Put `openarch-app` on your `PATH`, next to `openarch` (the CLI for OpenArch, 0.5.2 or later).
 
 ```sh
 VERSION=0.7.2
@@ -27,7 +38,7 @@ sudo mv openarch-app /usr/local/bin/
 openarch app version
 ```
 
-On Windows, download the `.zip` archive and put `openarch-app.exe` in a folder on your `PATH`. The binaries are not signed with an Apple or Microsoft certificate: when a browser downloaded the file, run `xattr -d com.apple.quarantine openarch-app` once on macOS.
+On Windows, download the `.zip` archive, unblock it (Properties, Unblock), and put `openarch-app.exe` in a folder on your `PATH`. Do not name that folder `openarch-app`: `openarch app init` creates its setup folder with that name. The binaries are not signed with an Apple or Microsoft certificate: when a browser downloaded the file, run `xattr -d com.apple.quarantine openarch-app` once on macOS.
 
 `checksums.txt` is signed with [cosign](https://docs.sigstore.dev/) by the release workflow (keyless, with the GitHub Actions identity), and each archive has an SBOM (`.sbom.json`, SPDX):
 
