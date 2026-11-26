@@ -65,7 +65,7 @@ const (
 // The upstream repository and the commit that every setup uses.
 const (
 	UpstreamURL = "https://github.com/AlfrescoLabs/content-lake-app-deployment.git"
-	UpstreamRef = "703c402d4a55a32492de7d246fcaff5c884b92f5"
+	UpstreamRef = "66b00111adca99db2832bd9c3bfa09bd73d051b9"
 	// ProjectName replaces the fixed upstream Compose project name content-lake-app.
 	ProjectName = "openarch-app"
 )
@@ -80,6 +80,7 @@ var PreviousUpstreamRefs = []string{
 	"66615041c84bda9565953a9285e0cbe03db7d01f", // 0.4.0
 	"ef6b22e4b25f25257bd82fa50c9356036f2aaae4", // 0.5.0 to 0.6.1
 	"4c580808474270095ffc38f03904bff78ee074f8", // 0.6.2 to 0.7.3
+	"703c402d4a55a32492de7d246fcaff5c884b92f5", // 0.7.4
 }
 
 // KnownUpstream reports whether ref is the upstream commit of this release or
